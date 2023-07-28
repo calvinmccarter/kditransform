@@ -1,1 +1,1 @@
-from ksquantile.ksquantile_transformer import ksquantile_transformer
+from ksquantile.ksquantile_transformer import KSQuantileTransformer

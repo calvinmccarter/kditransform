@@ -29,7 +29,7 @@ configuration = {
         "Programming Language :: Python :: 3.8",
     ],
     "keywords": "preprocessing, quantile transformation, kernel smoothing",
-    "url": "http://github.com/calvinmccarter/ksquantile",
+    "url": "http://github.com/calvinmccarter/kernel-smoothed-squantile",
     "author": "Calvin McCarter",
     "author_email": "mccarter.calvin@gmail.com",
     "maintainer": "Calvin McCarter",
