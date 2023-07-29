@@ -7,9 +7,9 @@ def readme():
 
 
 configuration = {
-    "name": "ksquantile",
+    "name": "kdquantile",
     "version": "0.1.0",
-    "description": "Kernel-smoothed quantile transformation",
+    "description": "Kernel density quantile transformation",
     "long_description": readme(),
     "classifiers": [
         "Development Status :: 3 - Alpha",
@@ -29,12 +29,12 @@ configuration = {
         "Programming Language :: Python :: 3.8",
     ],
     "keywords": "preprocessing, quantile transformation, kernel smoothing",
-    "url": "http://github.com/calvinmccarter/kernel-smoothed-squantile",
+    "url": "http://github.com/calvinmccarter/kdquantile",
     "author": "Calvin McCarter",
     "author_email": "mccarter.calvin@gmail.com",
     "maintainer": "Calvin McCarter",
     "maintainer_email": "mccarter.calvin@gmail.com",
-    "packages": ["ksquantile"],
+    "packages": ["kdquantile"],
     "install_requires": [
         "scikit-learn >= 0.23",
         "scipy >= 1.0",

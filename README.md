@@ -1,1 +1,1 @@
-# kernel-smoothed-quantile
+# kdquantile

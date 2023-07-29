@@ -9,7 +9,6 @@ from sklearn.base import (
     OneToOneFeatureMixin,
     TransformerMixin,
 )
-from sklearn.preprocessing import QuantileTransformer
 from sklearn.utils.validation import (
     FLOAT_DTYPES,
     check_is_fitted,    
@@ -19,8 +18,8 @@ from sklearn.utils.validation import (
 BOUNDS_THRESHOLD = 1e-7
 
 
-class KSQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimator):
-    """Transform features using kernel-smoothed quantiles information.
+class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimator):
+    """Transform features using kernel density quantiles information.
 
     This method transforms the features to follow a uniform distribution,
     or transforms them by scaling and translating them into a [0, 1] range,
@@ -125,12 +124,6 @@ class KSQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
         X = self._check_inputs(X, in_fit=True, copy=False)
         n_samples = X.shape[0]
 
-        if self.n_quantiles > n_samples:
-            warnings.warn(
-                "n_quantiles (%s) is greater than the total number "
-                "of samples (%s). n_quantiles is set to "
-                "n_samples." % (self.n_quantiles, n_samples)
-            )
         self.n_quantiles_ = max(1, min(self.n_quantiles, n_samples))
 
         rng = check_random_state(self.random_state)
