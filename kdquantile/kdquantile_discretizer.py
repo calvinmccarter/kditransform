@@ -60,31 +60,32 @@ class KDDiscretizer(TransformerMixin, BaseEstimator):
         self.precision = precision
         self.enable_predict_proba = enable_predict_proba
 
-        self.n_bins_ = None  # ndarray of shape (n_features,)
-        self.centroids_ = None # np.array of size (n_clusters_,)
-        self.boundaries_ = None # np.array of size (n_clusters_ - 1,)
+        self.n_bins_ = None  # ndarray of shape (n_columns,)
+        self.centroids_ = None # list, each elt of size (n_bins_[cix],)
+        self.boundaries_ = None # list, each elt of size (n_bins_[cix] - 1,)
 
-        self.kdes_ = None
+        self.kdes_ = None  # list of length n_columns, each with n_bins_[cix] elts
 
     def fit(self, X):
         prec = self.precision
-        alpha = self.alpha
         beta = self.beta
-        n_bins_min = self.n_bins_min
-        n_bins_max = self.n_bins_max
         if self.enable_predict_proba and X.shape[1] > 1:
             raise ValueError("enable_predict_proba requires only 1 feature")
 
         self.n_features_in_ = X.shape[1]
-        self.kdes_ = []
+        self.n_bins_ = np.empty((X.shape[1],), dtype=int)
+        self.centroids_ = [None] * X.shape[1]
+        self.boundaries_ = [None] * X.shape[1]
         
+        self.kdes_ = []  # Only appended to when enable_predict_proba
+
         # Finds modality, centroids, and boundaries of transformed data
         n_evals = int(np.round(1.0 / prec)) + 4
         evals = np.linspace(np.min(X, axis=0) - prec, np.max(X, axis=0) + prec, n_evals)
         for cix in range(X.shape[1]):
             colX = X[:, cix]
             kder = spst.gaussian_kde(colX, beta)
-            pdf = kder.pdf(evals)
+            pdf = kder.pdf(evals[:, cix])
             centroid_ixs = np.sort(spsg.argrelmax(pdf)[0])
             self.centroids_[cix] = evals[centroid_ixs, cix]
             boundary_ixs, _ = spsg.find_peaks(-1 * pdf)
@@ -100,10 +101,9 @@ class KDDiscretizer(TransformerMixin, BaseEstimator):
             # Fits KDEs for each bin
             if not self.enable_predict_proba:
                 continue
-            kders = []
             colX_ =  colX.reshape(-1, 1)  # (N, 1)
             boundaries_ = self.boundaries_[cix].reshape(1, -1)  # (1, n_bins_[cix])
-            preds = np.sum(colX_ >= boundaries_, axis=1)  # (N,)
+            preds = np.sum(colX_ >= boundaries_, axis=1)  # (N, )
             n_unique_preds = np.unique(preds).shape[0]
             if n_unique_preds != self.n_bins_[cix]:
                 warnings.warn("{}: n_unique_preds={}, n_clusters={}".format(
@@ -111,11 +111,12 @@ class KDDiscretizer(TransformerMixin, BaseEstimator):
                 print(self.get_centroids())
                 print(self.get_boundaries())
                 print(self.get_intervals())
+            kders = []
             for i in range(self.n_bins_[cix]):
                 curX = colX[preds == i]
                 if curX.shape[0] == 0:
                     warnings.warn("{}: ZERO samples for k=%i".format(cix, i))
-                    kde_i = spst.gaussian_kde(X) # XXX
+                    kde_i = spst.gaussian_kde(colX) # XXX
                 elif curX.shape[0] == 1:
                     warnings.warn("{}: only one sample for k=%i".format(cix, i))
                     xv = np.asscalar(curX)
@@ -124,9 +125,9 @@ class KDDiscretizer(TransformerMixin, BaseEstimator):
                 elif np.std(curX) < 1e-5:
                     warnings.warn("{}: zero variance for k=%i".format(cix, i))
                     kde_i = spst.gaussian_kde(
-                        X + np.random.normal(loc=0, scale=1e-5, size=X.shape))
+                        curX + np.random.normal(loc=0, scale=1e-5, size=curX.shape))
                 else:
-                    kde_i = spst.gaussian_kde(X[preds == i])
+                    kde_i = spst.gaussian_kde(curX)
                 kders.append(kde_i)
             self.kdes_.append(kders)
 
@@ -165,7 +166,7 @@ class KDDiscretizer(TransformerMixin, BaseEstimator):
         N, D = X.shape
         Y = np.empty((N, D), dtype=int)
         for cix, colX in enumerate(X.T):
-            colX_ = np.reshape(-1, 1)  # (N, 1)
+            colX_ = np.reshape(colX, (-1, 1))  # (N, 1)
             boundaries_ = self.boundaries_[cix].reshape(1, -1) # (1, n_bins_[cix])
             Y[:, cix] = np.sum(colX_ > boundaries_, axis=1)
         return Y
@@ -197,7 +198,7 @@ class KDDiscretizer(TransformerMixin, BaseEstimator):
         N = X.shape[0]
         unnorm_logprobas = np.zeros((N, self.n_bins_[0]))
         for k in range(self.n_bins_[0]):
-            unnorm_logprobas[:, k] = self.kdes_[0][k].logpdf(X)
+            unnorm_logprobas[:, k] = self.kdes_[0][k].logpdf(X[:, 0])
         pis = np.max(unnorm_logprobas, axis=1, keepdims=True)
         lnorm = pis + np.log(np.sum(np.exp(unnorm_logprobas-pis), axis=1, keepdims=True))
         pred_logprobas = unnorm_logprobas - lnorm
@@ -252,11 +253,18 @@ class KDQuantileDiscretizer(TransformerMixin, BaseEstimator):
         random_state=None,
     ):
         self.alpha = alpha
+        self.n_quantiles = n_quantiles
+        self.subsample = subsample
         self.beta = beta
+        self.precision = precision
+        self.enable_predict_proba = enable_predict_proba
+        self.random_state = random_state
 
+        """
         self.n_bins_ = None  # ndarray of shape (n_features,)
         self.centroids_ = None # np.array of size (n_clusters_,)
         self.boundaries_ = None # np.array of size (n_clusters_ - 1,)
+        """
         self.kdqt_ = KDQuantileTransformer(
             alpha=alpha,
             n_quantiles=n_quantiles,

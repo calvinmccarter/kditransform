@@ -28,15 +28,12 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
     Parameters
     ----------
     alpha: float > 0, 'scott', 'silverman', or None
-        Bandwidth parameter for kernel-smoothing.
+        Bandwidth factor parameter for kernel density estimator.
 
     Attributes
     ----------
-    alpha: float
-        Bandwidth parameter for kernel-smoothing.
-        
-    Examples
-    --------
+    quantiles_: ndarray
+        Quantiles of kernel density estimator.
     """
     def __init__(
         self,
@@ -95,6 +92,7 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
         self.quantiles_ = np.transpose(self.quantiles_)
 
         # Make sure that quantiles are monotonically increasing
+        # XXX - still necessary? and should be done per-column?
         self.quantiles_ = np.maximum.accumulate(self.quantiles_)
 
 
