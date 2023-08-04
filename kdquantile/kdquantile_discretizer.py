@@ -119,7 +119,7 @@ class KDDiscretizer(TransformerMixin, BaseEstimator):
                     kde_i = spst.gaussian_kde(colX) # XXX
                 elif curX.shape[0] == 1:
                     warnings.warn("{}: only one sample for k=%i".format(cix, i))
-                    xv = np.asscalar(curX)
+                    xv = curX.item()
                     Xv = np.array([xv, xv]) + np.random.normal(scale=1e-5, size=2)
                     kde_i = spst.gaussian_kde(Xv)
                 elif np.std(curX) < 1e-5:
