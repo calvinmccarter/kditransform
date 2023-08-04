@@ -1,3 +1,5 @@
-seaborn
+hdbscan
 matplotlib
 jupyterlab
+scikit-survival
+seaborn
