@@ -72,28 +72,32 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
                     n_samples, size=self.subsample, replace=False
                 )
                 col = col.take(subsample_idx, mode="clip")
-            kder = spst.gaussian_kde(col, bw_method=self.alpha)
-            N = col.shape[0]
-            T = np.zeros(N)
-            xmin = np.min(col)
-            xmax = np.max(col)
-            for n in range(N):
-                T[n] = kder.integrate_box_1d(xmin, col[n])
-            intcx1 = kder.integrate_box_1d(xmin, xmin)
-            intcxN = kder.integrate_box_1d(xmin, xmax)
-            m = 1.0 / (intcxN - intcx1)
-            b = -m * intcx1 # intc0 / (intc0 - intcxN)
-            # T is the result of nonlinear mapping of X onto [0,1]
-            T = m*T + b
-            inverse_func = spip.interp1d(
-                T, col, bounds_error=False, fill_value=(xmin,xmax))
-            quantiles = inverse_func(self.references_)
+            if np.var(col) == 0:
+                # gaussian_kde -> _compute_covariance -> linalg.cholesky error
+                # We instead duplicate QuantileTransformer's behavior here.
+                quantiles = np.nanpercentile(col, self.references_ * 100)
+            else:
+                kder = spst.gaussian_kde(col, bw_method=self.alpha)
+                N = col.shape[0]
+                T = np.zeros(N)
+                xmin = np.min(col)
+                xmax = np.max(col)
+                for n in range(N):
+                    T[n] = kder.integrate_box_1d(xmin, col[n])
+                intcx1 = kder.integrate_box_1d(xmin, xmin)
+                intcxN = kder.integrate_box_1d(xmin, xmax)
+                m = 1.0 / (intcxN - intcx1)
+                b = -m * intcx1 # intc0 / (intc0 - intcxN)
+                # T is the result of nonlinear mapping of X onto [0,1]
+                T = m*T + b
+                inverse_func = spip.interp1d(
+                    T, col, bounds_error=False, fill_value=(xmin,xmax))
+                quantiles = inverse_func(self.references_)
             self.quantiles_.append(quantiles)
         self.quantiles_ = np.transpose(self.quantiles_)
 
         # Make sure that quantiles are monotonically increasing
-        # XXX - still necessary? and should be done per-column?
-        self.quantiles_ = np.maximum.accumulate(self.quantiles_)
+        self.quantiles_ = np.maximum.accumulate(self.quantiles_, axis=0)
 
 
     def fit(self, X, y=None):
