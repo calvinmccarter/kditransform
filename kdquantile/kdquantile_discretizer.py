@@ -35,7 +35,7 @@ class KDDiscretizer(TransformerMixin, BaseEstimator):
 
     Attributes
     ----------
-    bin_edges_ : ndarray of ndarray of shape (n_features,)
+    boundaries_ : ndarray of ndarray of shape (n_features,)
         The edges of each bin. Contain arrays of varying shapes ``(n_bins_, )``
         Ignored features will have empty arrays.
 
@@ -214,32 +214,46 @@ class KDQuantileDiscretizer(TransformerMixin, BaseEstimator):
     Parameters
     ----------
     alpha: float > 0, 'scott', 'silverman', or None
-        bandwidth parameter for integrated KDE (used to transform)
+        Bandwidth parameter for KDQuantileTransformer (default is 1).
+
+    n_quantiles : int, default=1000 or n_samples
+        Number of quantiles to be computed. It corresponds to the number
+        of landmarks used to discretize the cumulative distribution function.
+        If n_quantiles is larger than the number of samples, n_quantiles is set
+        to the number of samples as a larger number of quantiles does not give
+        a better approximation of the cumulative distribution function
+        estimator.
+
+    subsample : int, default=10_000
+        Maximum number of samples used to estimate the quantiles for
+        computational efficiency. Note that the subsampling procedure may
+        differ for value-identical sparse and dense matrices.
 
     beta: float > 0, 'scott', 'silverman', or None
-        bandwidth parameter for differentiated KDE (used to predict)
+        Bandwidth parameter for KDDiscretizer (default is 'scott').
 
     precision: float
         Absolute precision of finite differences, used to compute the 
             cluster centroids and boundaries.
 
+    enable_predict_proba: bool
+        Whether to also estimate KDEs for each discrete state, allowing
+            probabilistic cluster membership predictions (default is False).
+
+    random_state : int, RandomState instance or None, default=None
+        Determines random number generation for subsampling and smoothing
+        noise.
+        Please see `subsample` for more details.
+        Pass an int for reproducible results across multiple function calls.
+
     Attributes
     ----------
-    bin_edges_ : ndarray of ndarray of shape (n_features,)
-        The edges of each bin. Contain arrays of varying shapes ``(n_bins_, )``
-        Ignored features will have empty arrays.
+    kdqt_: fitted KDQuantileTransformer object
 
-    centroids_ : ndarray of ndarray of shape (n_features,)
-        The centers of each bin. Contain arrays of varying shapes ``(n_bins_, )``
-        Ignored features will have empty arrays.
+    kdd_: fitted KDDiscretizer object
 
-
-    n_bins_ : ndarray of shape (n_features,), dtype=np.int_
-        Number of bins per feature. Bins whose width are too small
-        (i.e., <= 1e-8) are removed with a warning.
-
-    n_features_in_ : int
-        Number of features seen during :term:`fit`.
+    n_features_in_: int
+        Number of features seen during `fit`.
     """
 
     def __init__(
@@ -260,11 +274,6 @@ class KDQuantileDiscretizer(TransformerMixin, BaseEstimator):
         self.enable_predict_proba = enable_predict_proba
         self.random_state = random_state
 
-        """
-        self.n_bins_ = None  # ndarray of shape (n_features,)
-        self.centroids_ = None # np.array of size (n_clusters_,)
-        self.boundaries_ = None # np.array of size (n_clusters_ - 1,)
-        """
         self.kdqt_ = KDQuantileTransformer(
             alpha=alpha,
             n_quantiles=n_quantiles,
@@ -294,9 +303,15 @@ class KDQuantileDiscretizer(TransformerMixin, BaseEstimator):
 
     def get_centroids(self):
         """
-        Returns peaks for each of the classes
+        Returns peaks for each of the classes.
+        Returns a list, each elt corresponding to feature with cix index, 
+        having size (n_bins_[cix],).
         """
-        return self.centroids_.copy()
+        centroids = [
+            self.kdqt_.inverse_transform(cent.reshape(-1, 1)).ravel()
+            for cent in self.kdd_.centroids_
+        ]
+        return centroids
 
     def get_boundaries(self):
         """
@@ -304,24 +319,11 @@ class KDQuantileDiscretizer(TransformerMixin, BaseEstimator):
         of the boundaries between each of the discretized categories.
         The returned list will be of length (n_clusters - 1).
         """
-        return self.boundaries_.copy()
-
-    def get_intervals(self):
-        """
-        Returns
-        -------
-        intervals: np.array of shape (n_boundaries+1, 2)
-            Returns the sorted intervals, one interval per row.
-            The left endpoints of the intervals would be [-inf] + boundaries.
-            The right endpoints of the intervals would be boundaries + [+inf].
-
-        being a tuple (left_i, right_i). left_0 is always -inf, and 
-        """
-        intervals = np.c_[
-            np.r_[np.NINF, self.boundaries_], 
-            np.r_[self.boundaries_, np.PINF]
+        boundaries = [
+            self.kdqt_.inverse_transform(bound.reshape(-1, 1)).ravel()
+            for bound in self.kdd_.boundaries_
         ]
-        return intervals
+        return boundaries
 
     def transform(self, X):
         Y = self.kdqt_.transform(X)

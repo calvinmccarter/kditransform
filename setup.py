@@ -36,6 +36,7 @@ configuration = {
     "maintainer_email": "mccarter.calvin@gmail.com",
     "packages": ["kdquantile"],
     "install_requires": [
+        "numpy",
         "scikit-learn >= 0.23",
         "scipy >= 1.0",
     ],
