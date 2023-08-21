@@ -10,6 +10,7 @@ from sklearn.base import (
     OneToOneFeatureMixin,
     TransformerMixin,
 )
+from sklearn.utils.validation import check_random_state
 
 from kdquantile import KDQuantileTransformer
 
@@ -59,6 +60,7 @@ class KDDiscretizer(TransformerMixin, BaseEstimator):
         self.beta = beta
         self.precision = precision
         self.enable_predict_proba = enable_predict_proba
+        self.random_state = random_state
 
         self.n_bins_ = None  # ndarray of shape (n_columns,)
         self.centroids_ = None # list, each elt of size (n_bins_[cix],)
@@ -67,6 +69,7 @@ class KDDiscretizer(TransformerMixin, BaseEstimator):
         self.kdes_ = None  # list of length n_columns, each with n_bins_[cix] elts
 
     def fit(self, X):
+        rng = check_random_state(self.random_state)
         prec = self.precision
         beta = self.beta
         if self.enable_predict_proba and X.shape[1] > 1:
@@ -120,12 +123,12 @@ class KDDiscretizer(TransformerMixin, BaseEstimator):
                 elif curX.shape[0] == 1:
                     warnings.warn("{}: only one sample for k=%i".format(cix, i))
                     xv = curX.item()
-                    Xv = np.array([xv, xv]) + np.random.normal(scale=1e-5, size=2)
+                    Xv = np.array([xv, xv]) + rng.normal(scale=1e-5, size=2)
                     kde_i = spst.gaussian_kde(Xv)
                 elif np.std(curX) < 1e-5:
                     warnings.warn("{}: zero variance for k=%i".format(cix, i))
                     kde_i = spst.gaussian_kde(
-                        curX + np.random.normal(loc=0, scale=1e-5, size=curX.shape))
+                        curX + rng.normal(loc=0, scale=1e-5, size=curX.shape))
                 else:
                     kde_i = spst.gaussian_kde(curX)
                 kders.append(kde_i)
