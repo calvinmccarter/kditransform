@@ -28,3 +28,11 @@ def test_correlation():
     assert Ykdq.shape == (1000, 1)
     assert cp <= ckdq <= cr
     np.testing.assert_allclose(ckdq, 0.9581695121244862, rtol=1e-6, atol=1e-6)
+
+
+def test_multicolumns():
+    rng = np.random.default_rng(12345)
+    X = rng.uniform(size=(500, 100))
+    Xkdq = kdquantile.KDQuantileTransformer(alpha=1.).fit_transform(X)
+    assert Xkdq.shape == X.shape
+    np.testing.assert_allclose(X, Xkdq, rtol=1e-2, atol=1e-1)
