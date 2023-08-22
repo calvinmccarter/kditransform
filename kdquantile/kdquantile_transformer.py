@@ -65,8 +65,14 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
         """
         n_samples, n_features = X.shape
 
+        if isinstance(self.alpha, list):
+            assert len(self.alpha) == n_features
+            alphas = self.alpha
+        else:
+            alphas = [self.alpha] * n_features
+
         self.quantiles_ = []
-        for col in X.T:
+        for col, alpha in zip(X.T, alphas):
             if self.subsample < n_samples:
                 subsample_idx = random_state.choice(
                     n_samples, size=self.subsample, replace=False
@@ -77,7 +83,7 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
                 # We instead duplicate QuantileTransformer's behavior here.
                 quantiles = np.nanpercentile(col, self.references_ * 100)
             else:
-                kder = spst.gaussian_kde(col, bw_method=self.alpha)
+                kder = spst.gaussian_kde(col, bw_method=alpha)
                 N = col.shape[0]
                 T = np.zeros(N)
                 xmin = np.min(col)
