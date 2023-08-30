@@ -126,15 +126,21 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
                 )
                 col = col.take(subsample_idx, mode="clip")
             if np.var(col) == 0:
-                # gaussian_kde -> _compute_covariance -> linalg.cholesky error
-                # We instead duplicate QuantileTransformer's behavior here.
-                quantiles = np.nanpercentile(col, self.references_ * 100)
+                # Causes gaussian_kde -> _compute_covariance -> linalg.cholesky error.
+                # We instead duplicate QuantileTransformer's behavior here, which is
+                # quantiles = np.nanpercentile(col, self.references_ * 100)
+                # But https://krstn.eu/np.nanpercentile()-there-has-to-be-a-faster-way/
+                # So instead we hard-code what nanpercentile does in this case:
+                quantiles = col[0] * np.ones_like(self.references_)
             else:
                 kder = spst.gaussian_kde(col, bw_method=alpha)
-                N = col.shape[0]
-                T = np.zeros(N)
                 xmin = np.min(col)
                 xmax = np.max(col)
+                # This reduces the total complexity from O(subsample_ ** 2) to
+                # O(n_quantiles_ * subsample_ + subsample_ * log(subsample_)):
+                col = np.quantile(col, self.references_)
+                N = col.shape[0]
+                T = np.zeros(N)
                 for n in range(N):
                     T[n] = kder.integrate_box_1d(xmin, col[n])
                 intcx1 = kder.integrate_box_1d(xmin, xmin)
@@ -175,7 +181,7 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
         if self.subsample is None:
             self.subsample_ = n_samples
         else:
-            self.subsample_ = self.subsample
+            self.subsample_ = min(self.subsample, n_samples)
 
         if self.n_quantiles is None:
             self.n_quantiles_ = n_samples
@@ -191,7 +197,7 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
 
         rng = check_random_state(self.random_state)
 
-        # Create the quantiles of reference
+        # Create the quantiles of reference, with shape (n_quantiles_,)
         self.references_ = np.linspace(0, 1, self.n_quantiles_, endpoint=True)
         self._dense_fit(X, rng)
 
