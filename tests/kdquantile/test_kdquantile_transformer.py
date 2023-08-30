@@ -36,3 +36,21 @@ def test_multicolumns():
     Xkdq = kdquantile.KDQuantileTransformer(alpha=1.).fit_transform(X)
     assert Xkdq.shape == X.shape
     np.testing.assert_allclose(X, Xkdq, rtol=1e-2, atol=1e-1)
+
+def test_precision():
+    rng = np.random.default_rng(12345)
+    X = rng.lognormal(0.5, 1, size=(12000, 1))
+    ultra = kdquantile.KDQuantileTransformer(alpha=1., n_quantiles=None, subsample=None, random_state=12345)
+    high = kdquantile.KDQuantileTransformer(alpha=1., n_quantiles=1000, subsample=10000, random_state=12345)
+    med = kdquantile.KDQuantileTransformer(alpha=1., n_quantiles=1000, subsample=3000, random_state=12345)
+    low = kdquantile.KDQuantileTransformer(alpha=1., n_quantiles=1000, subsample=1000, random_state=12345)
+    bad = kdquantile.KDQuantileTransformer(alpha=1., n_quantiles=100, subsample=1000, random_state=12345)
+    Y_ultra = ultra.fit_transform(X)
+    Y_high = high.fit_transform(X)
+    Y_med = med.fit_transform(X)
+    Y_low = low.fit_transform(X)
+    Y_bad = bad.fit_transform(X)
+    np.testing.assert_allclose(Y_ultra, Y_high, rtol=0.0, atol=0.0066)
+    np.testing.assert_allclose(Y_ultra, Y_med, rtol=0.0, atol=0.021)
+    np.testing.assert_allclose(Y_ultra, Y_low, rtol=0.0, atol=0.098)
+    np.testing.assert_allclose(Y_ultra, Y_bad, rtol=0.0, atol=0.098)
