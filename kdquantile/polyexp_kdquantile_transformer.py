@@ -4,6 +4,7 @@ import numpy as np
 import scipy.interpolate as spip
 import scipy.stats as spst
 
+from scipy import integrate
 from sklearn.base import (
     BaseEstimator,
     OneToOneFeatureMixin,
@@ -12,14 +13,20 @@ from sklearn.base import (
 from sklearn.utils.validation import (
     FLOAT_DTYPES,
     check_is_fitted,    
-    check_random_state,
+)
+
+from kdquantile.ksum import (
+    betas_for_order,
+    ksum_numba,
 )
 
 BOUNDS_THRESHOLD = 1e-7
 
 
-class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimator):
-    """Transform features using kernel density quantiles information.
+class PolyExpKDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimator):
+    """Transform features using kernel density quantiles information,
+    with the polynomial-exponential kernel from (Hofmeyr, 2019).
+
 
     This method transforms the features to follow a uniform distribution,
     or transforms them by scaling and translating them into a [0, 1] range,
@@ -29,6 +36,9 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
     ----------
     alpha: float > 0, 'scott', 'silverman', or None
         Bandwidth factor parameter for kernel density estimator.
+
+    order: int
+        Order in the polynomial-exponential family.
 
     n_quantiles : int or None, default=1000 or n_samples
         Number of quantiles to be computed. It corresponds to the number
@@ -42,19 +52,6 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
         Marginal distribution for the transformed data. The choices are
         'uniform' (default) or 'normal'.
 
-    subsample : int or None, default=10_000
-        Maximum number of samples used to estimate the quantiles for
-        computational efficiency. Note that the subsampling procedure may
-        differ for value-identical sparse and dense matrices.
-        If None, no subsampling is performed.
-
-    random_state : int, RandomState instance or None, default=None
-        Determines random number generation for subsampling and smoothing
-        noise.
-        Please see ``subsample`` for more details.
-        Pass an int for reproducible results across multiple function calls.
-        See :term:`Glossary <random_state>`.
-
     copy : bool, default=True
         Set to False to perform inplace transformation and avoid a copy (if the
         input is already a numpy array).
@@ -64,9 +61,6 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
     n_quantiles_ : int
         The actual number of quantiles used to discretize the cumulative
         distribution function.
-
-    subsamples_: int
-        The actual number of subsamples sampled from the data.
 
     quantiles_ : ndarray of shape (n_quantiles, n_features)
         Quantiles of kernel density estimator, with values corresponding
@@ -82,26 +76,23 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
     def __init__(
         self,
         alpha=1.,
+        order=4,
         n_quantiles=1000,
         output_distribution="uniform",
-        subsample=10000,
-        random_state=None,
         copy=True,
     ):
         self.alpha = alpha
+        self.order = order
         self.n_quantiles = n_quantiles
         self.output_distribution = output_distribution
-        self.subsample = subsample
-        self.random_state = random_state
         self.copy = copy
 
         self.n_quantiles_ = None
-        self.subsample_ = None
         self.references_ = None
         self.quantiles_ = None
         self.n_features_in_ = None
 
-    def _dense_fit(self, X, random_state):
+    def _dense_fit(self, X):
         """Compute percentiles for dense matrices.
 
         Parameters
@@ -118,13 +109,13 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
         else:
             alphas = [self.alpha] * n_features
 
+        wgts = np.ones(n_samples).astype(X.dtype)
+        betas = betas_for_order(self.order)
+        n_eval = n_samples + (n_samples - 1) * 3
+
+
         self.quantiles_ = []
         for col, alpha in zip(X.T, alphas):
-            if self.subsample_ < n_samples:
-                subsample_idx = random_state.choice(
-                    n_samples, size=self.subsample_, replace=False
-                )
-                col = col.take(subsample_idx, mode="clip")
             if np.var(col) == 0:
                 # Causes gaussian_kde -> _compute_covariance -> linalg.cholesky error.
                 # We instead duplicate QuantileTransformer's behavior here, which is
@@ -133,31 +124,42 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
                 # So instead we hard-code what nanpercentile does in this case:
                 quantiles = col[0] * np.ones_like(self.references_)
             else:
-                kder = spst.gaussian_kde(col, bw_method=alpha)
                 xmin = np.min(col)
                 xmax = np.max(col)
-                # This reduces the total complexity from O(subsample_ ** 2) to
-                # O(n_quantiles_ * subsample_ + subsample_ * log(subsample_)):
-                col = np.quantile(col, self.references_)
-                N = col.shape[0]
-                T = np.zeros(N)
-                # TODO: make faster.
-                # Each loop, ndtr is called twice with subsample_ points.
-                # We could easily eliminate the first call, for xmin.
-                # We could also vectorize further, eliminating this loop.
-                # Overall though, it is not so bad, because ndtr is 100x
-                # faster than norm.cdf.
-                # https://www.cuemacro.com/2021/01/02/python-days-might-not-be-numba-ed/
-                for n in range(N):
-                    T[n] = kder.integrate_box_1d(xmin, col[n])
-                intcx1 = kder.integrate_box_1d(xmin, xmin)
-                intcxN = kder.integrate_box_1d(xmin, xmax)
+                h = alpha * np.std(col)
+                col_mean = np.mean(col)
+                col -= col_mean
+                col_sort = np.sort(col)
+                earlypts = col_sort[:-1] + 0.25 * np.diff(col_sort)
+                midpts = col_sort[:-1] + 0.50 * np.diff(col_sort)
+                latepts = col_sort[:-1] + 0.75 * np.diff(col_sort)
+                col_eval = np.sort(np.concatenate([col_sort, earlypts, midpts, latepts]))
+                
+                # Allocate memory for numba
+                density_out = np.zeros(n_eval).astype(X.dtype)
+                counts = np.zeros(n_eval).astype(np.int64)
+                coefs = np.zeros_like(betas)
+                Ly = np.zeros((self.order + 1, n_samples), order="C")
+                Ry = np.zeros((self.order + 1, n_samples), order="C")
+
+                ksum_numba(
+                    col_sort, wgts, col_eval, h, betas, 
+                    density_out, counts, coefs, Ly, Ry,
+                )
+                density_out[np.isnan(density_out)] = 1e-300
+                density_out[~np.isfinite(density_out)] = 1e-300
+                col += col_mean
+                col_sort += col_mean
+                col_eval += col_mean
+                T = integrate.cumulative_trapezoid(density_out, col_eval, initial=0)
+                intcx1 = T[0]
+                intcxN = T[-1]
                 m = 1.0 / (intcxN - intcx1)
                 b = -m * intcx1 # intc0 / (intc0 - intcxN)
                 # T is the result of nonlinear mapping of X onto [0,1]
                 T = m*T + b
                 inverse_func = spip.interp1d(
-                    T, col, bounds_error=False, fill_value=(xmin,xmax))
+                    T, col_eval, bounds_error=False, fill_value=(xmin,xmax))
                 quantiles = inverse_func(self.references_)
             self.quantiles_.append(quantiles)
         self.quantiles_ = np.transpose(self.quantiles_)
@@ -185,28 +187,14 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
         X = self._check_inputs(X, in_fit=True, copy=False)
         n_samples, n_features = X.shape
 
-        if self.subsample is None:
-            self.subsample_ = n_samples
-        else:
-            self.subsample_ = min(self.subsample, n_samples)
-
         if self.n_quantiles is None:
             self.n_quantiles_ = n_samples
         else:
             self.n_quantiles_ = max(1, min(self.n_quantiles, n_samples))
 
-        if self.n_quantiles_ > self.subsample_:
-            raise ValueError(
-                "The number of quantiles cannot be greater than"
-                " the number of samples used. Got {} quantiles"
-                " and {} samples.".format(self.n_quantiles_, self.subsample_)
-            )
-
-        rng = check_random_state(self.random_state)
-
         # Create the quantiles of reference, with shape (n_quantiles_,)
         self.references_ = np.linspace(0, 1, self.n_quantiles_, endpoint=True)
-        self._dense_fit(X, rng)
+        self._dense_fit(X)
 
         self.n_features_in_ = n_features
 

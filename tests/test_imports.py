@@ -3,3 +3,4 @@ def test_import_packages():
     import kdquantile
     from kdquantile import KDQuantileTransformer
     from kdquantile import KDQuantileDiscretizer
+    from kdquantile import PolyExpKDQuantileTransformer
