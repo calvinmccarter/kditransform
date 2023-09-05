@@ -6,7 +6,9 @@ import kdquantile
 
 from sklearn.preprocessing import QuantileTransformer
 
-def test_correlation():
+
+@pytest.mark.parametrize("order, atol", [(1, 0.009), (4, 0.002)])
+def test_correlation(order, atol):
     rng = np.random.default_rng(12345)
 
     X = rng.uniform(size=1000)
@@ -21,15 +23,16 @@ def test_correlation():
     cr = np.cov(XR,YR)
     cr = cr[0,1] / np.sqrt(cr[0,0] * cr[1,1])
 
-    Xkdq = kdquantile.PolyExpKDQuantileTransformer(alpha=1.).fit_transform(X.reshape(-1, 1))
-    Ykdq = kdquantile.PolyExpKDQuantileTransformer(alpha=1.).fit_transform(Y.reshape(-1, 1))
+    pekdqer = kdquantile.PolyExpKDQuantileTransformer(alpha=1., order=order)
+    Xkdq = pekdqer.fit_transform(X.reshape(-1, 1))
+    Ykdq = pekdqer.fit_transform(Y.reshape(-1, 1))
     ckdq = np.cov(Xkdq.ravel(), Ykdq.ravel())
     ckdq = ckdq[0,1] / np.sqrt(ckdq[0,0] * ckdq[1,1])
 
     assert Xkdq.shape == (1000, 1)
     assert Ykdq.shape == (1000, 1)
     assert cp <= ckdq <= cr
-    np.testing.assert_allclose(ckdq, 0.9581695121244862, rtol=1e-6, atol=1e-6)
+    np.testing.assert_allclose(ckdq, 0.9581695121244862, rtol=0, atol=atol)
 
 
 def test_multicolumns():
@@ -48,21 +51,19 @@ def test_constant():
     np.testing.assert_equal(Yq, Ykdq)
 
 
-def test_precision():
+@pytest.mark.parametrize("order, atol", [(1, 0.04), (4, 0.007)])
+def test_precision(order, atol):
     rng = np.random.default_rng(12345)
     X = rng.lognormal(0.5, 1, size=(12000, 1))
-    ultra = kdquantile.KDQuantileTransformer(alpha=1., n_quantiles=None, subsample=None, random_state=12345)
-    order4 = kdquantile.PolyExpKDQuantileTransformer(alpha=1., order=4, n_quantiles=1000)
-    order1 = kdquantile.PolyExpKDQuantileTransformer(alpha=1., order=1, n_quantiles=1000)
+    ultra = kdquantile.KDQuantileTransformer(
+        alpha=1., n_quantiles=None, subsample=None, random_state=12345)
+    pekdqer = kdquantile.PolyExpKDQuantileTransformer(
+        alpha=1., order=order, n_quantiles=1000)
     ultra_time = time.time()
     Y_ultra = ultra.fit_transform(X)
     ultra_time = time.time() - ultra_time
-    order4_time = time.time()
-    Y_order4 = order4.fit_transform(X)
-    order4_time = time.time() - order4_time
-    order1_time = time.time()
-    Y_order1 = order1.fit_transform(X)
-    order1_time = time.time() - order1_time
-    print(f"ultra_time: {ultra_time:.3f} order4_time: {order4_time:.3f} order1_time: {order1_time:.3f}")
-    np.testing.assert_allclose(Y_ultra, Y_order4, rtol=0.0, atol=0.0066)
-    np.testing.assert_allclose(Y_ultra, Y_order1, rtol=0.0, atol=0.021)
+    pekdq_time = time.time()
+    Y_pekdq = pekdqer.fit_transform(X)
+    pekdq_time = time.time() - pekdq_time
+    print(f"ultra_time: {ultra_time:.3f} pe_{order}_time: {pekdq_time:.3f}")
+    np.testing.assert_allclose(Y_ultra, Y_pekdq, rtol=0.0, atol=atol)

@@ -29,7 +29,7 @@ def test_correlation():
     assert Xkdq.shape == (1000, 1)
     assert Ykdq.shape == (1000, 1)
     assert cp <= ckdq <= cr
-    np.testing.assert_allclose(ckdq, 0.9581695121244862, rtol=1e-6, atol=1e-6)
+    np.testing.assert_allclose(ckdq, 0.9581695121244862, rtol=0, atol=1e-6)
 
 
 def test_multicolumns():
@@ -59,13 +59,15 @@ def test_precision():
     ultra_time = time.time()
     Y_ultra = ultra.fit_transform(X)
     ultra_time = time.time() - ultra_time
-    med_time = time.time()
+    high_time = time.time()
     Y_high = high.fit_transform(X)
-    med_time = time.time() - med_time
+    high_time = time.time() - high_time
+    med_time = time.time()
     Y_med = med.fit_transform(X)
+    med_time = time.time() - med_time
     Y_low = low.fit_transform(X)
     Y_bad = bad.fit_transform(X)
-    print(f"ultra_time: {ultra_time:.3f} med_time: {med_time:.3f}")
+    print(f"ultra_time: {ultra_time:.3f} high_time: {high_time:.3f} med_time: {med_time:.3f}")
     np.testing.assert_allclose(Y_ultra, Y_high, rtol=0.0, atol=0.0066)
     np.testing.assert_allclose(Y_ultra, Y_med, rtol=0.0, atol=0.021)
     np.testing.assert_allclose(Y_ultra, Y_low, rtol=0.0, atol=0.098)

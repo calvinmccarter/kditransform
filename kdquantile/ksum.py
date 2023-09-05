@@ -26,6 +26,7 @@ def roughness_K(betas):
     result = np.sum(betakj / (2 ** kpj) * factorial(kpj))
     return result
 
+
 def var_K(betas):
     beta_use = betas / norm_const_K(betas)
     factorial_terms = np.array([
@@ -34,11 +35,27 @@ def var_K(betas):
     return 2 * np.sum(factorial_terms)
 
 
+def h_Gauss_to_K(h, betas):
+    """Converts bandwidth of Gaussian kernel to that of poly-exp kernel."""
+    ret = h*(roughness_K(betas)/(var_K(betas)**2)*2*np.sqrt(np.pi)) ** 0.2
+    return ret
+
+
 @njit
 def ksum_numba(x, y, x_eval, h, betas, output, counts, coefs, Ly, Ry):
+    """Implements kernel density estimation with poly-exponential kernel.
+
+    See "Fast exact evaluation of univariate kernel sums" (Hofmeyr, 2019)
+    and https://github.com/DavidHofmeyr/FKSUM.
+    """
     n = x.shape[0]
     n_eval = x_eval.shape[0]
     order = betas.shape[0] - 1
+    output[:] = 0.
+    counts[:] = 0
+    coefs[:] = 0.
+    Ly[:, :] = 0.
+    Ry[:, :] = 0.
 
     for i in range(order + 1):
         Ly[i, 0] = np.power(-x[0], i) * y[0]
@@ -96,7 +113,6 @@ def ksum_numba(x, y, x_eval, h, betas, output, counts, coefs, Ly, Ry):
                         + np.power(-x_eval[i], orddo - j) * Ry[j, ix - 1] / exp_mult
                     ) / denom
 
-"""
 
 def ksum(x, y, x_eval, h=None, betas=None):
     # Assumes x and x_eval are sorted
@@ -131,6 +147,48 @@ def ksum(x, y, x_eval, h=None, betas=None):
     return output
 
 
+def ksum_density(x, alpha=1., order=4):
+    col = x
+    X = x
+    n_samples, = x.shape
+
+    wgts = np.ones(n_samples).astype(X.dtype)
+    betas = betas_for_order(order)
+    n_eval = n_samples + (n_samples - 1) * 3
+    
+    xmin = np.min(col)
+    xmax = np.max(col)
+    h = alpha * np.std(col)
+    col_mean = np.mean(col)
+    col -= col_mean
+    col_sort = np.sort(col)
+    earlypts = col_sort[:-1] + 0.25 * np.diff(col_sort)
+    midpts = col_sort[:-1] + 0.50 * np.diff(col_sort)
+    latepts = col_sort[:-1] + 0.75 * np.diff(col_sort)
+    col_eval = np.sort(np.concatenate([col_sort, earlypts, midpts, latepts]))
+    col_eval = np.linspace(np.min(col), np.max(col), 1000)
+    n_eval = col_eval.shape[0]
+    
+    # Allocate memory for numba
+    density_out = np.zeros(n_eval).astype(X.dtype)
+    counts = np.zeros(n_eval).astype(np.int64)
+    coefs = np.zeros_like(betas)
+    Ly = np.zeros((order + 1, n_samples), order="C")
+    Ry = np.zeros((order + 1, n_samples), order="C")
+
+    ksum_numba(
+        col_sort, wgts, col_eval, h, betas, 
+        density_out, counts, coefs, Ly, Ry,
+    )
+    density_out[np.isnan(density_out)] = 1e-300
+    density_out[~np.isfinite(density_out)] = 1e-300
+    col += col_mean
+    col_sort += col_mean
+    col_eval += col_mean
+
+    return col_eval, density_out
+
+"""
 if __name__ == "__main__":
     x = np.sort(np.array([0., 0.1, 0.2, 1., 5.]).astype(np.float64))
     y = np.ones_like(x)

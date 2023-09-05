@@ -17,6 +17,7 @@ from sklearn.utils.validation import (
 
 from kdquantile.ksum import (
     betas_for_order,
+    h_Gauss_to_K,
     ksum_numba,
 )
 
@@ -111,8 +112,14 @@ class PolyExpKDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseE
 
         wgts = np.ones(n_samples).astype(X.dtype)
         betas = betas_for_order(self.order)
-        n_eval = n_samples + (n_samples - 1) * 3
 
+        # Allocate memory for numba
+        n_eval = max(1000, 5 * self.n_quantiles_)
+        density_out = np.zeros(n_eval).astype(X.dtype)
+        counts = np.zeros(n_eval).astype(np.int64)
+        coefs = np.zeros_like(betas)
+        Ly = np.zeros((self.order + 1, n_samples), order="C")
+        Ry = np.zeros((self.order + 1, n_samples), order="C")
 
         self.quantiles_ = []
         for col, alpha in zip(X.T, alphas):
@@ -126,38 +133,51 @@ class PolyExpKDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseE
             else:
                 xmin = np.min(col)
                 xmax = np.max(col)
-                h = alpha * np.std(col)
+                h = h_Gauss_to_K(alpha * np.std(col), betas)
                 col_mean = np.mean(col)
                 col -= col_mean
                 col_sort = np.sort(col)
-                earlypts = col_sort[:-1] + 0.25 * np.diff(col_sort)
-                midpts = col_sort[:-1] + 0.50 * np.diff(col_sort)
-                latepts = col_sort[:-1] + 0.75 * np.diff(col_sort)
-                col_eval = np.sort(np.concatenate([col_sort, earlypts, midpts, latepts]))
+                col_eval = np.linspace(np.min(col), np.max(col), n_eval)
                 
-                # Allocate memory for numba
-                density_out = np.zeros(n_eval).astype(X.dtype)
-                counts = np.zeros(n_eval).astype(np.int64)
-                coefs = np.zeros_like(betas)
-                Ly = np.zeros((self.order + 1, n_samples), order="C")
-                Ry = np.zeros((self.order + 1, n_samples), order="C")
-
                 ksum_numba(
-                    col_sort, wgts, col_eval, h, betas, 
+                    col_sort, wgts, col_eval, h, betas,
                     density_out, counts, coefs, Ly, Ry,
                 )
+                density_out /= (n_samples * h)
                 density_out[np.isnan(density_out)] = 1e-300
                 density_out[~np.isfinite(density_out)] = 1e-300
                 col += col_mean
                 col_sort += col_mean
                 col_eval += col_mean
                 T = integrate.cumulative_trapezoid(density_out, col_eval, initial=0)
-                intcx1 = T[0]
+                intcx1 = 0.
                 intcxN = T[-1]
                 m = 1.0 / (intcxN - intcx1)
                 b = -m * intcx1 # intc0 / (intc0 - intcxN)
                 # T is the result of nonlinear mapping of X onto [0,1]
                 T = m*T + b
+
+                """
+                gT = np.zeros_like(T)
+                kder = spst.gaussian_kde(col, bw_method=alpha)
+                for n in range(n_eval):
+                    gT[n] = kder.integrate_box_1d(xmin, col_eval[n])
+                intcx1 = kder.integrate_box_1d(xmin, xmin)
+                intcxN = kder.integrate_box_1d(xmin, xmax)
+                m = 1.0 / (intcxN - intcx1)
+                b = -m * intcx1 # intc0 / (intc0 - intcxN)
+                # T is the result of nonlinear mapping of X onto [0,1]
+                gT = m*gT + b
+
+                import matplotlib.pyplot as plt
+                plt.figure()
+                plt.scatter(gT, T)
+                plt.figure()
+                plt.plot(col_eval, density_out)
+                plt.figure()
+                plt.plot(col_eval, kder.evaluate(col_eval))
+                """
+
                 inverse_func = spip.interp1d(
                     T, col_eval, bounds_error=False, fill_value=(xmin,xmax))
                 quantiles = inverse_func(self.references_)
