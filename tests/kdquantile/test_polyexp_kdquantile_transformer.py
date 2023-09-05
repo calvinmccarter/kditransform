@@ -7,8 +7,9 @@ import kdquantile
 from sklearn.preprocessing import QuantileTransformer
 
 
-@pytest.mark.parametrize("order, atol", [(1, 0.009), (4, 0.002)])
-def test_correlation(order, atol):
+@pytest.mark.parametrize("order, method, atol", [
+    (1, "uniform", 0.009), (4, "uniform", 0.002), (1, "train", 0.009), (4, "train", 0.002)])
+def test_correlation(order, method, atol):
     rng = np.random.default_rng(12345)
 
     X = rng.uniform(size=1000)
@@ -23,7 +24,8 @@ def test_correlation(order, atol):
     cr = np.cov(XR,YR)
     cr = cr[0,1] / np.sqrt(cr[0,0] * cr[1,1])
 
-    pekdqer = kdquantile.PolyExpKDQuantileTransformer(alpha=1., order=order)
+    pekdqer = kdquantile.PolyExpKDQuantileTransformer(
+        alpha=1., order=order, method=method)
     Xkdq = pekdqer.fit_transform(X.reshape(-1, 1))
     Ykdq = pekdqer.fit_transform(Y.reshape(-1, 1))
     ckdq = np.cov(Xkdq.ravel(), Ykdq.ravel())
@@ -51,14 +53,15 @@ def test_constant():
     np.testing.assert_equal(Yq, Ykdq)
 
 
-@pytest.mark.parametrize("order, atol", [(1, 0.04), (4, 0.007)])
-def test_precision(order, atol):
+@pytest.mark.parametrize("order, method, atol", [
+    (1, "uniform", 0.04), (4, "uniform", 0.007), (1, "train", 0.04), (4, "train", 0.007)])
+def test_precision(order, method, atol):
     rng = np.random.default_rng(12345)
     X = rng.lognormal(0.5, 1, size=(12000, 1))
     ultra = kdquantile.KDQuantileTransformer(
         alpha=1., n_quantiles=None, subsample=None, random_state=12345)
     pekdqer = kdquantile.PolyExpKDQuantileTransformer(
-        alpha=1., order=order, n_quantiles=1000)
+        alpha=1., order=order, method=method, n_quantiles=1000)
     ultra_time = time.time()
     Y_ultra = ultra.fit_transform(X)
     ultra_time = time.time() - ultra_time

@@ -41,6 +41,10 @@ class PolyExpKDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseE
     order: int
         Order in the polynomial-exponential family.
 
+    method: 'uniform', 'train'
+        If 'uniform', evaluates KDE at uniform grid-points.
+        If 'train', evaluates KDE at train samples and their midpoints.
+
     n_quantiles : int or None, default=1000 or n_samples
         Number of quantiles to be computed. It corresponds to the number
         of landmarks used to discretize the cumulative distribution function.
@@ -78,12 +82,14 @@ class PolyExpKDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseE
         self,
         alpha=1.,
         order=4,
+        method="uniform",
         n_quantiles=1000,
         output_distribution="uniform",
         copy=True,
     ):
         self.alpha = alpha
         self.order = order
+        self.method = method
         self.n_quantiles = n_quantiles
         self.output_distribution = output_distribution
         self.copy = copy
@@ -114,7 +120,10 @@ class PolyExpKDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseE
         betas = betas_for_order(self.order)
 
         # Allocate memory for numba
-        n_eval = max(1000, 5 * self.n_quantiles_)
+        if self.method == "uniform":
+            n_eval = max(1000, 5 * self.n_quantiles_)
+        elif self.method == "train":
+            n_eval = n_samples + (n_samples - 1) * 1
         density_out = np.zeros(n_eval).astype(X.dtype)
         counts = np.zeros(n_eval).astype(np.int64)
         coefs = np.zeros_like(betas)
@@ -137,7 +146,11 @@ class PolyExpKDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseE
                 col_mean = np.mean(col)
                 col -= col_mean
                 col_sort = np.sort(col)
-                col_eval = np.linspace(np.min(col), np.max(col), n_eval)
+                if self.method == "uniform":
+                    col_eval = np.linspace(np.min(col), np.max(col), n_eval)
+                elif self.method == "train":
+                    midpts = col_sort[:-1] + 0.50 * np.diff(col_sort)
+                    col_eval = np.sort(np.concatenate([col_sort, midpts]))
                 
                 ksum_numba(
                     col_sort, wgts, col_eval, h, betas,
@@ -156,27 +169,6 @@ class PolyExpKDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseE
                 b = -m * intcx1 # intc0 / (intc0 - intcxN)
                 # T is the result of nonlinear mapping of X onto [0,1]
                 T = m*T + b
-
-                """
-                gT = np.zeros_like(T)
-                kder = spst.gaussian_kde(col, bw_method=alpha)
-                for n in range(n_eval):
-                    gT[n] = kder.integrate_box_1d(xmin, col_eval[n])
-                intcx1 = kder.integrate_box_1d(xmin, xmin)
-                intcxN = kder.integrate_box_1d(xmin, xmax)
-                m = 1.0 / (intcxN - intcx1)
-                b = -m * intcx1 # intc0 / (intc0 - intcxN)
-                # T is the result of nonlinear mapping of X onto [0,1]
-                gT = m*gT + b
-
-                import matplotlib.pyplot as plt
-                plt.figure()
-                plt.scatter(gT, T)
-                plt.figure()
-                plt.plot(col_eval, density_out)
-                plt.figure()
-                plt.plot(col_eval, kder.evaluate(col_eval))
-                """
 
                 inverse_func = spip.interp1d(
                     T, col_eval, bounds_error=False, fill_value=(xmin,xmax))
