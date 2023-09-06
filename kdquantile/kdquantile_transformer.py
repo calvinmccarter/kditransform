@@ -4,6 +4,7 @@ import numpy as np
 import scipy.interpolate as spip
 import scipy.stats as spst
 
+from scipy import integrate
 from sklearn.base import (
     BaseEstimator,
     OneToOneFeatureMixin,
@@ -13,6 +14,12 @@ from sklearn.utils.validation import (
     FLOAT_DTYPES,
     check_is_fitted,    
     check_random_state,
+)
+
+from kdquantile.ksum import (
+    betas_for_order,
+    h_Gauss_to_K,
+    ksum_numba,
 )
 
 BOUNDS_THRESHOLD = 1e-7
@@ -30,7 +37,21 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
     alpha: float > 0, 'scott', 'silverman', or None
         Bandwidth factor parameter for kernel density estimator.
 
-    n_quantiles : int or None, default=1000 or n_samples
+    kernel: 'polyexp', 'gaussian' (default='polyexp')
+        If 'gaussian', uses scipy's gaussian_kde. If 'polyexp', uses the
+        polynomial-exponential kernel approximation from (Hofmeyr, 2019).
+
+    polyexp_order: int, default=4
+        Order of the kernel in the polynomial-exponential family.
+        Ignored for 'gaussian' kernel.
+
+    polyexp_eval: 'uniform', 'train'
+        Evaluation locations for numerical integration of polyexp KDE.
+        If 'uniform', evaluates KDE at uniform grid-points.
+        If 'train', evaluates KDE at train samples and their midpoints.
+        Ignored for 'gaussian' kernel.
+
+    n_quantiles : int or None, default=1000
         Number of quantiles to be computed. It corresponds to the number
         of landmarks used to discretize the cumulative distribution function.
         If n_quantiles is larger than the number of samples, n_quantiles is set
@@ -42,7 +63,7 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
         Marginal distribution for the transformed data. The choices are
         'uniform' (default) or 'normal'.
 
-    subsample : int or None, default=10_000
+    subsample : int or None, default=None
         Maximum number of samples used to estimate the quantiles for
         computational efficiency. Note that the subsampling procedure may
         differ for value-identical sparse and dense matrices.
@@ -82,18 +103,37 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
     def __init__(
         self,
         alpha=1.,
+        kernel="polyexp",
+        polyexp_order=4,
+        polyexp_eval="uniform",
         n_quantiles=1000,
         output_distribution="uniform",
-        subsample=10000,
+        subsample=None,
         random_state=None,
         copy=True,
     ):
         self.alpha = alpha
+        self.kernel = kernel
+        self.polyexp_order = polyexp_order
+        self.polyexp_eval = polyexp_eval
         self.n_quantiles = n_quantiles
         self.output_distribution = output_distribution
         self.subsample = subsample
         self.random_state = random_state
         self.copy = copy
+
+        if kernel not in ("gaussian", "polyexp"):
+            raise ValueError(f"unexpected kernel: {kernel}")
+        if kernel == "polyexp":
+            if subsample is not None:
+                warnings.warn(
+                    "Subsampling is not needed and not recommended"
+                    "for polyexp kernel since it is fast already."
+                )
+            if polyexp_eval not in ("uniform", "train"):
+                raise ValueError(f"Unexpected polyexp_eval: {polyexp_eval}")
+            if int(polyexp_order) != polyexp_order or polyexp_order < 1:
+                raise ValueError(f"Invalid polyexp_order {polyexp_order}")
 
         self.n_quantiles_ = None
         self.subsample_ = None
@@ -101,22 +141,26 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
         self.quantiles_ = None
         self.n_features_in_ = None
 
-    def _dense_fit(self, X, random_state):
-        """Compute percentiles for dense matrices.
+    def _gaussian_dense_fit(self, X, alphas, random_state):
+        """Compute percentiles for dense matrices, using Gaussian kernel.
 
         Parameters
         ----------
         X : ndarray of shape (n_samples, n_features)
             The data used to scale along the features axis.
+
+        alphas : list of len n_features
+            Bandwidth per each feature.
+
+        Reads
+        -----
+        subsample_, n_quantiles_, references_
+
+        Modifies
+        --------
+        quantiles_
         """
         n_samples, n_features = X.shape
-
-        if isinstance(self.alpha, list):
-            # Intentially not mentioned in the API, since experimental.
-            assert len(self.alpha) == n_features
-            alphas = self.alpha
-        else:
-            alphas = [self.alpha] * n_features
 
         self.quantiles_ = []
         for col, alpha in zip(X.T, alphas):
@@ -129,7 +173,7 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
                 # Causes gaussian_kde -> _compute_covariance -> linalg.cholesky error.
                 # We instead duplicate QuantileTransformer's behavior here, which is
                 # quantiles = np.nanpercentile(col, self.references_ * 100)
-                # But https://krstn.eu/np.nanpercentile()-there-has-to-be-a-faster-way/
+                # But krstn.eu/np.nanpercentile()-there-has-to-be-a-faster-way/
                 # So instead we hard-code what nanpercentile does in this case:
                 quantiles = col[0] * np.ones_like(self.references_)
             else:
@@ -145,9 +189,9 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
                 # Each loop, ndtr is called twice with subsample_ points.
                 # We could easily eliminate the first call, for xmin.
                 # We could also vectorize further, eliminating this loop.
-                # Overall though, it is not so bad, because ndtr is 100x
-                # faster than norm.cdf.
-                # https://www.cuemacro.com/2021/01/02/python-days-might-not-be-numba-ed/
+                # Overall though, it is not bad, because ndtr is 100x faster.
+                # than norm.cdf, and scipy's gaussian_kde calls ndtr directly.
+                # www.cuemacro.com/2021/01/02/python-days-might-not-be-numba-ed
                 for n in range(N):
                     T[n] = kder.integrate_box_1d(xmin, col[n])
                 intcx1 = kder.integrate_box_1d(xmin, xmin)
@@ -165,6 +209,94 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
         # Make sure that quantiles are monotonically increasing
         self.quantiles_ = np.maximum.accumulate(self.quantiles_, axis=0)
 
+    def _polyexp_dense_fit(self, X, alphas, random_state):
+        """Compute percentiles for dense matrices, using polyexp kernel.
+
+        See "Fast exact evaluation of univariate kernel sums" (Hofmeyr, 2019).
+
+        Parameters
+        ----------
+        X : ndarray of shape (n_samples, n_features)
+            The data used to scale along the features axis.
+
+        alphas : list of len n_features
+            Bandwidth per each feature.
+
+        Reads
+        -----
+        polyexp_order, polyexp_eval, subsample_, n_quantiles_, references_
+
+        Modifies
+        --------
+        quantiles_
+        """
+        n_samples, n_features = X.shape
+
+        wgts = np.ones(n_samples).astype(X.dtype)
+        betas = betas_for_order(self.polyexp_order)
+
+        # Allocate memory for numba
+        if self.polyexp_eval == "uniform":
+            n_eval = max(1000, 5 * self.n_quantiles_)
+        elif self.polyexp_eval == "train":
+            n_eval = n_samples + (n_samples - 1) * 1
+        density_out = np.zeros(n_eval).astype(X.dtype)
+        counts = np.zeros(n_eval).astype(np.int64)
+        coefs = np.zeros_like(betas)
+        Ly = np.zeros((self.polyexp_order + 1, n_samples), order="C")
+        Ry = np.zeros((self.polyexp_order + 1, n_samples), order="C")
+
+        self.quantiles_ = []
+        for col, alpha in zip(X.T, alphas):
+            if self.subsample_ < n_samples:
+                subsample_idx = random_state.choice(
+                    n_samples, size=self.subsample_, replace=False
+                )
+                col = col.take(subsample_idx, mode="clip")
+            if np.var(col) == 0:
+                quantiles = col[0] * np.ones_like(self.references_)
+            else:
+                xmin = np.min(col)
+                xmax = np.max(col)
+                if alpha == "scott":
+                    alpha = np.power(n_samples, (-1./(1+4)))
+                elif alpha == "silverman":
+                    alpha = np.power(n_samples*(1+2.0)/4.0, -1./(1+4))
+                # Bandwidth needs to be shrunk for polyexp kernel:
+                h = h_Gauss_to_K(alpha * np.std(col), betas)
+                col_mean = np.mean(col)
+                col -= col_mean
+                col_sort = np.sort(col)
+                if self.polyexp_eval == "uniform":
+                    col_eval = np.linspace(np.min(col), np.max(col), n_eval)
+                elif self.polyexp_eval == "train":
+                    midpts = col_sort[:-1] + 0.50 * np.diff(col_sort)
+                    col_eval = np.sort(np.concatenate([col_sort, midpts]))
+
+                ksum_numba(
+                    col_sort, wgts, col_eval, h, betas,
+                    density_out, counts, coefs, Ly, Ry,
+                )
+                density_out /= (n_samples * h)
+                density_out[np.isnan(density_out)] = 1e-300
+                density_out[~np.isfinite(density_out)] = 1e-300
+                col += col_mean
+                col_sort += col_mean
+                col_eval += col_mean
+                T = integrate.cumulative_trapezoid(density_out, col_eval, initial=0)
+                intcx1 = 0.
+                intcxN = T[-1]
+                m = 1.0 / (intcxN - intcx1)
+                b = -m * intcx1
+                T = m*T + b
+
+                inverse_func = spip.interp1d(
+                    T, col_eval, bounds_error=False, fill_value=(xmin,xmax))
+                quantiles = inverse_func(self.references_)
+            self.quantiles_.append(quantiles)
+        self.quantiles_ = np.transpose(self.quantiles_)
+        # Make sure that quantiles are monotonically increasing
+        self.quantiles_ = np.maximum.accumulate(self.quantiles_, axis=0)
 
     def fit(self, X, y=None):
         """Compute the kernel-smoothed quantiles used for transforming.
@@ -184,16 +316,24 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
         """
         X = self._check_inputs(X, in_fit=True, copy=False)
         n_samples, n_features = X.shape
+        rng = check_random_state(self.random_state)
 
-        if self.subsample is None:
-            self.subsample_ = n_samples
+        if isinstance(self.alpha, list):
+            # We quietly support different alphas for different features.
+            assert len(self.alpha) == n_features
+            alphas = self.alpha
         else:
-            self.subsample_ = min(self.subsample, n_samples)
+            alphas = [self.alpha] * n_features
 
         if self.n_quantiles is None:
             self.n_quantiles_ = n_samples
         else:
             self.n_quantiles_ = max(1, min(self.n_quantiles, n_samples))
+
+        if self.subsample is None:
+            self.subsample_ = n_samples
+        else:
+            self.subsample_ = min(self.subsample, n_samples)
 
         if self.n_quantiles_ > self.subsample_:
             raise ValueError(
@@ -202,11 +342,12 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
                 " and {} samples.".format(self.n_quantiles_, self.subsample_)
             )
 
-        rng = check_random_state(self.random_state)
-
         # Create the quantiles of reference, with shape (n_quantiles_,)
         self.references_ = np.linspace(0, 1, self.n_quantiles_, endpoint=True)
-        self._dense_fit(X, rng)
+        if self.kernel == "gaussian":
+            self._gaussian_dense_fit(X, alphas, rng)
+        elif self.kernel == "polyexp":
+            self._polyexp_dense_fit(X, alphas, rng)
 
         self.n_features_in_ = n_features
 

@@ -41,9 +41,6 @@ class PolyExpKDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseE
     order: int
         Order in the polynomial-exponential family.
 
-    method: 'uniform', 'train'
-        If 'uniform', evaluates KDE at uniform grid-points.
-        If 'train', evaluates KDE at train samples and their midpoints.
 
     n_quantiles : int or None, default=1000 or n_samples
         Number of quantiles to be computed. It corresponds to the number
@@ -98,87 +95,6 @@ class PolyExpKDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseE
         self.references_ = None
         self.quantiles_ = None
         self.n_features_in_ = None
-
-    def _dense_fit(self, X):
-        """Compute percentiles for dense matrices.
-
-        Parameters
-        ----------
-        X : ndarray of shape (n_samples, n_features)
-            The data used to scale along the features axis.
-        """
-        n_samples, n_features = X.shape
-
-        if isinstance(self.alpha, list):
-            # Intentially not mentioned in the API, since experimental.
-            assert len(self.alpha) == n_features
-            alphas = self.alpha
-        else:
-            alphas = [self.alpha] * n_features
-
-        wgts = np.ones(n_samples).astype(X.dtype)
-        betas = betas_for_order(self.order)
-
-        # Allocate memory for numba
-        if self.method == "uniform":
-            n_eval = max(1000, 5 * self.n_quantiles_)
-        elif self.method == "train":
-            n_eval = n_samples + (n_samples - 1) * 1
-        density_out = np.zeros(n_eval).astype(X.dtype)
-        counts = np.zeros(n_eval).astype(np.int64)
-        coefs = np.zeros_like(betas)
-        Ly = np.zeros((self.order + 1, n_samples), order="C")
-        Ry = np.zeros((self.order + 1, n_samples), order="C")
-
-        self.quantiles_ = []
-        for col, alpha in zip(X.T, alphas):
-            if np.var(col) == 0:
-                # Causes gaussian_kde -> _compute_covariance -> linalg.cholesky error.
-                # We instead duplicate QuantileTransformer's behavior here, which is
-                # quantiles = np.nanpercentile(col, self.references_ * 100)
-                # But https://krstn.eu/np.nanpercentile()-there-has-to-be-a-faster-way/
-                # So instead we hard-code what nanpercentile does in this case:
-                quantiles = col[0] * np.ones_like(self.references_)
-            else:
-                xmin = np.min(col)
-                xmax = np.max(col)
-                h = h_Gauss_to_K(alpha * np.std(col), betas)
-                col_mean = np.mean(col)
-                col -= col_mean
-                col_sort = np.sort(col)
-                if self.method == "uniform":
-                    col_eval = np.linspace(np.min(col), np.max(col), n_eval)
-                elif self.method == "train":
-                    midpts = col_sort[:-1] + 0.50 * np.diff(col_sort)
-                    col_eval = np.sort(np.concatenate([col_sort, midpts]))
-                
-                ksum_numba(
-                    col_sort, wgts, col_eval, h, betas,
-                    density_out, counts, coefs, Ly, Ry,
-                )
-                density_out /= (n_samples * h)
-                density_out[np.isnan(density_out)] = 1e-300
-                density_out[~np.isfinite(density_out)] = 1e-300
-                col += col_mean
-                col_sort += col_mean
-                col_eval += col_mean
-                T = integrate.cumulative_trapezoid(density_out, col_eval, initial=0)
-                intcx1 = 0.
-                intcxN = T[-1]
-                m = 1.0 / (intcxN - intcx1)
-                b = -m * intcx1 # intc0 / (intc0 - intcxN)
-                # T is the result of nonlinear mapping of X onto [0,1]
-                T = m*T + b
-
-                inverse_func = spip.interp1d(
-                    T, col_eval, bounds_error=False, fill_value=(xmin,xmax))
-                quantiles = inverse_func(self.references_)
-            self.quantiles_.append(quantiles)
-        self.quantiles_ = np.transpose(self.quantiles_)
-
-        # Make sure that quantiles are monotonically increasing
-        self.quantiles_ = np.maximum.accumulate(self.quantiles_, axis=0)
-
 
     def fit(self, X, y=None):
         """Compute the kernel-smoothed quantiles used for transforming.

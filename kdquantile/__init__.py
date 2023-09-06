@@ -1,5 +1,4 @@
 from kdquantile.kdquantile_transformer import KDQuantileTransformer
-from kdquantile.kdquantile_discretizer import KDQuantileDiscretizer
 from kdquantile.kdquantile_discretizer import KDDiscretizer
+from kdquantile.kdquantile_discretizer import KDQuantileDiscretizer
 from kdquantile.kdquantile_discretizer import KBinsKDQuantileDiscretizer
-from kdquantile.polyexp_kdquantile_transformer import PolyExpKDQuantileTransformer
