@@ -8,6 +8,8 @@ from sklearn.preprocessing import QuantileTransformer
 
 @pytest.mark.parametrize("kernel, polyexp_order, polyexp_eval, atol", [
     ("gaussian", 1234, "asdf", 1e-6),
+    ("polyexp", 1, "auto", 0.009),
+    ("polyexp", 4, "auto", 0.002),
     ("polyexp", 1, "uniform", 0.009),
     ("polyexp", 4, "uniform", 0.002),
     ("polyexp", 1, "train", 0.009),
@@ -96,7 +98,13 @@ def test_gaussian_precision():
     np.testing.assert_allclose(Y_ultra, Y_bad, rtol=0.0, atol=0.099)
 
 @pytest.mark.parametrize("order, polyexp_eval, atol", [
-    (1, "uniform", 0.04), (4, "uniform", 0.007), (1, "train", 0.04), (4, "train", 0.007)])
+    (1, "auto", 0.04),
+    (4, "auto", 0.007),
+    (1, "uniform", 0.04),
+    (4, "uniform", 0.007),
+    (1, "train", 0.04),
+    (4, "train", 0.007),
+])
 def test_precision(order, polyexp_eval, atol):
     rng = np.random.default_rng(12345)
     X = rng.lognormal(0.5, 1, size=(12000, 1))

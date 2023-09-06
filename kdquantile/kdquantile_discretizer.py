@@ -270,7 +270,6 @@ class KDQuantileDiscretizer(TransformerMixin, BaseEstimator):
         self,
         alpha=1.,
         n_quantiles=1000,
-        subsample=10000,
         beta="scott",
         precision=1e-3,
         enable_predict_proba=False,
@@ -278,7 +277,6 @@ class KDQuantileDiscretizer(TransformerMixin, BaseEstimator):
     ):
         self.alpha = alpha
         self.n_quantiles = n_quantiles
-        self.subsample = subsample
         self.beta = beta
         self.precision = precision
         self.enable_predict_proba = enable_predict_proba
@@ -286,8 +284,11 @@ class KDQuantileDiscretizer(TransformerMixin, BaseEstimator):
 
         self.kdqt_ = KDQuantileTransformer(
             alpha=alpha,
+            kernel="polyexp",
+            polyexp_order=4,
+            polyexp_eval="auto",
             n_quantiles=n_quantiles,
-            subsample=subsample,
+            subsample=None,
             random_state=random_state,
         )
         self.kdd_ = KDDiscretizer(

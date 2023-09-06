@@ -45,10 +45,11 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
         Order of the kernel in the polynomial-exponential family.
         Ignored for 'gaussian' kernel.
 
-    polyexp_eval: 'uniform', 'train'
+    polyexp_eval: 'uniform', 'train', 'auto' (default='auto')
         Evaluation locations for numerical integration of polyexp KDE.
         If 'uniform', evaluates KDE at uniform grid-points.
         If 'train', evaluates KDE at train samples and their midpoints.
+        If 'auto', combines both above approaches.
         Ignored for 'gaussian' kernel.
 
     n_quantiles : int or None, default=1000
@@ -57,7 +58,7 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
         If n_quantiles is larger than the number of samples, n_quantiles is set
         to the number of samples as a larger number of quantiles does not give
         a better approximation of the cumulative distribution function
-        estimator.
+        estimator. If None, is set to the number of samples.
 
     output_distribution : {'uniform', 'normal'}, default='uniform'
         Marginal distribution for the transformed data. The choices are
@@ -105,7 +106,7 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
         alpha=1.,
         kernel="polyexp",
         polyexp_order=4,
-        polyexp_eval="uniform",
+        polyexp_eval="auto",
         n_quantiles=1000,
         output_distribution="uniform",
         subsample=None,
@@ -130,7 +131,7 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
                     "Subsampling is not needed and not recommended"
                     "for polyexp kernel since it is fast already."
                 )
-            if polyexp_eval not in ("uniform", "train"):
+            if polyexp_eval not in ("uniform", "train", "auto"):
                 raise ValueError(f"Unexpected polyexp_eval: {polyexp_eval}")
             if int(polyexp_order) != polyexp_order or polyexp_order < 1:
                 raise ValueError(f"Invalid polyexp_order {polyexp_order}")
@@ -237,9 +238,15 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
 
         # Allocate memory for numba
         if self.polyexp_eval == "uniform":
-            n_eval = max(1000, 5 * self.n_quantiles_)
+            n_eval = n_samples if self.n_quantiles is None else self.n_quantiles
         elif self.polyexp_eval == "train":
             n_eval = n_samples + (n_samples - 1) * 1
+        elif self.polyexp_eval == "auto":
+            n_eval = (
+                n_samples if self.n_quantiles is None else self.n_quantiles
+                + self.n_quantiles_
+            )
+
         density_out = np.zeros(n_eval).astype(X.dtype)
         counts = np.zeros(n_eval).astype(np.int64)
         coefs = np.zeros_like(betas)
@@ -272,6 +279,14 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
                 elif self.polyexp_eval == "train":
                     midpts = col_sort[:-1] + 0.50 * np.diff(col_sort)
                     col_eval = np.sort(np.concatenate([col_sort, midpts]))
+                elif self.polyexp_eval == "auto":
+                    col_u = np.linspace(
+                        np.min(col), np.max(col),
+                        n_samples if self.n_quantiles is None else self.n_quantiles
+                    )
+                    col_s = np.quantile(col, self.references_)
+                    col_eval = np.sort(np.concatenate([col_u, col_s]))
+                    assert len(col_eval) == n_eval
 
                 ksum_numba(
                     col_sort, wgts, col_eval, h, betas,
