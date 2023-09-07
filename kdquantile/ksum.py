@@ -41,6 +41,7 @@ def h_Gauss_to_K(h, betas):
     return ret
 
 
+#@njit(error_model="numpy")
 @njit
 def ksum_numba(x, y, x_eval, h, betas, output, counts, coefs, Ly, Ry):
     """Implements kernel density estimation with poly-exponential kernel.
@@ -110,7 +111,7 @@ def ksum_numba(x, y, x_eval, h, betas, output, counts, coefs, Ly, Ry):
                 for j in range(orddo + 1):
                     output[i] += betas[orddo] * coefs[j] * (
                         np.power(x_eval[i], orddo - j) * Ly[j, ix - 1] * exp_mult
-                        + np.power(-x_eval[i], orddo - j) * Ry[j, ix - 1] / exp_mult
+                        + np.power(-x_eval[i], orddo - j) * Ry[j, ix - 1] / max(exp_mult, 1e-300)
                     ) / denom
 
 
