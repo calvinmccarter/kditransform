@@ -81,6 +81,10 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
         Set to False to perform inplace transformation and avoid a copy (if the
         input is already a numpy array).
 
+    exact: bool, default=False
+        If True, does not compute and store integrals at landmarks, and instead
+        performs integration during calls to transform.
+
     Attributes
     ----------
     n_quantiles_ : int
@@ -112,6 +116,7 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
         subsample=None,
         random_state=None,
         copy=True,
+        exact=False,
     ):
         self.alpha = alpha
         self.kernel = kernel
@@ -122,6 +127,7 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
         self.subsample = subsample
         self.random_state = random_state
         self.copy = copy
+        self.exact = exact
 
         if kernel not in ("gaussian", "polyexp"):
             raise ValueError(f"unexpected kernel: {kernel}")
@@ -135,12 +141,18 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
                 raise ValueError(f"Unexpected polyexp_eval: {polyexp_eval}")
             if int(polyexp_order) != polyexp_order or polyexp_order < 1:
                 raise ValueError(f"Invalid polyexp_order {polyexp_order}")
+        if exact:
+            if output_distribution == "normal":
+                raise NotImplementedError("exact only transforms to uniform")
+            if kernel == "polyexp":
+                raise NotImplementedError("exact only uses gaussian kernel")
 
         self.n_quantiles_ = None
         self.subsample_ = None
         self.references_ = None
         self.quantiles_ = None
         self.n_features_in_ = None
+        self.X_ = None
 
     def _gaussian_dense_fit(self, X, alphas, random_state):
         """Compute percentiles for dense matrices, using Gaussian kernel.
@@ -333,6 +345,10 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
         n_samples, n_features = X.shape
         rng = check_random_state(self.random_state)
 
+        if self.exact:
+            self.X_ = X.copy()
+            return self
+
         if isinstance(self.alpha, list):
             # We quietly support different alphas for different features.
             assert len(self.alpha) == n_features
@@ -470,6 +486,33 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
 
         return X
 
+    def _transform_exact(self, X):
+        n_test, n_features = X.shape
+        n_train = self.X_.shape[0]
+        if isinstance(self.alpha, list):
+            # We quietly support different alphas for different features.
+            assert len(self.alpha) == n_features
+            alphas = self.alpha
+        else:
+            alphas = [self.alpha] * n_features
+
+        for feature_idx in range(n_features):
+            train_col = self.X_[:, feature_idx]
+            test_col = X[:, feature_idx]
+            if np.var(train_col) == 0:
+                X[:, feature_idx] = test_col > train_col
+            elif self.kernel == "gaussian":
+                kder = spst.gaussian_kde(train_col, bw_method=alphas[feature_idx])
+                xmin = np.min(train_col)
+                xmax = np.max(train_col)
+                intcx1 = kder.integrate_box_1d(xmin, xmin)
+                intcxN = kder.integrate_box_1d(xmin, xmax)
+                m = 1.0 / (intcxN - intcx1)
+                b = -m * intcx1 # intc0 / (intc0 - intcxN)
+                for n in range(n_test):
+                    X[n, feature_idx] = m*kder.integrate_box_1d(xmin, test_col[n])+b
+        return X
+
     def transform(self, X):
         """Feature-wise transformation of the data.
 
@@ -486,6 +529,9 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
         check_is_fitted(self)
         X = self._check_inputs(X, in_fit=False, copy=self.copy)
 
+        if self.exact:
+            return self._transform_exact(X)
+
         return self._transform(X, inverse=False)
 
     def inverse_transform(self, X):
@@ -501,6 +547,8 @@ class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimato
         Xt : ndarray of (n_samples, n_features)
             The projected data.
         """
+        if self.exact:
+            raise NotImplementedError("inverse not supported for exact")
         check_is_fitted(self)
         X = self._check_inputs(
             X, in_fit=False, copy=self.copy
