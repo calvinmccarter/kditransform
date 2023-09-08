@@ -12,7 +12,7 @@ from sklearn.base import (
 )
 from sklearn.utils.validation import check_random_state
 
-from kdquantile import KDQuantileTransformer
+from kditransform import KDITransformer
 
 
 class KDDiscretizer(TransformerMixin, BaseEstimator):
@@ -216,15 +216,15 @@ class KDDiscretizer(TransformerMixin, BaseEstimator):
         return pred_probas  
 
 
-class KDQuantileDiscretizer(TransformerMixin, BaseEstimator):
+class KDIDiscretizer(TransformerMixin, BaseEstimator):
     """
-    Bin continuous data into intervals using KDQuantileTransformer.
+    Bin continuous data into intervals using KDITransformer.
     Outputs are ordinal-encoded, with the exception of predict_proba.
 
     Parameters
     ----------
     alpha: float > 0, 'scott', 'silverman', or None
-        Bandwidth parameter for KDQuantileTransformer (default is 1).
+        Bandwidth parameter for KDITransformer (default is 1).
 
     n_quantiles : int, default=1000 or n_samples
         Number of quantiles to be computed. It corresponds to the number
@@ -258,7 +258,7 @@ class KDQuantileDiscretizer(TransformerMixin, BaseEstimator):
 
     Attributes
     ----------
-    kdqt_: fitted KDQuantileTransformer object
+    kdit_: fitted KDITransformer object
 
     kdd_: fitted KDDiscretizer object
 
@@ -282,7 +282,7 @@ class KDQuantileDiscretizer(TransformerMixin, BaseEstimator):
         self.enable_predict_proba = enable_predict_proba
         self.random_state = random_state
 
-        self.kdqt_ = KDQuantileTransformer(
+        self.kdit_ = KDITransformer(
             alpha=alpha,
             kernel="polyexp",
             polyexp_order=4,
@@ -305,8 +305,8 @@ class KDQuantileDiscretizer(TransformerMixin, BaseEstimator):
         self.n_features_in_ = X.shape[1]
         
         # Finds non-parametric transformation onto [0,1] interval
-        self.kdqt_.fit(X)
-        T = self.kdqt_.transform(X)
+        self.kdit_.fit(X)
+        T = self.kdit_.transform(X)
 
         self.kdd_.fit(T)
 
@@ -319,7 +319,7 @@ class KDQuantileDiscretizer(TransformerMixin, BaseEstimator):
         having size (n_bins_[cix],).
         """
         centroids = [
-            self.kdqt_.inverse_transform(cent.reshape(-1, 1)).ravel()
+            self.kdit_.inverse_transform(cent.reshape(-1, 1)).ravel()
             for cent in self.kdd_.centroids_
         ]
         return centroids
@@ -331,13 +331,13 @@ class KDQuantileDiscretizer(TransformerMixin, BaseEstimator):
         The returned list will be of length (n_clusters - 1).
         """
         boundaries = [
-            self.kdqt_.inverse_transform(bound.reshape(-1, 1)).ravel()
+            self.kdit_.inverse_transform(bound.reshape(-1, 1)).ravel()
             for bound in self.kdd_.boundaries_
         ]
         return boundaries
 
     def transform(self, X):
-        Y = self.kdqt_.transform(X)
+        Y = self.kdit_.transform(X)
         T = self.kdd_.transform(Y)
         return T
 
@@ -352,7 +352,7 @@ class KDQuantileDiscretizer(TransformerMixin, BaseEstimator):
         Y: np.array of shape (n,)
             The discretization of X, taking values from [0, ..., n_clusters].
         """
-        Y = self.kdqt_.transform(X)
+        Y = self.kdit_.transform(X)
         pred = self.kdd_.predict(Y)
         return pred
 
@@ -368,14 +368,14 @@ class KDQuantileDiscretizer(TransformerMixin, BaseEstimator):
             The KDE-estimated probability that each item in X belongs
             to each of the classes.
         """
-        Y = self.kdqt_.transform(X)
+        Y = self.kdit_.transform(X)
         proba = self.kdd_.predict_proba(Y)
         return proba
 
 
-class KBinsKDQuantileDiscretizer(TransformerMixin, BaseEstimator):
+class KBinsKDIDiscretizer(TransformerMixin, BaseEstimator):
     """
-    Bin continuous data into intervals using KDQuantileTransformer.
+    Bin continuous data into intervals using KDITransformer.
     Outputs are ordinal-encoded, with the exception of predict_proba.
 
     Parameters
@@ -418,7 +418,7 @@ class KBinsKDQuantileDiscretizer(TransformerMixin, BaseEstimator):
 
     Attributes
     ----------
-    kdqt_: fitted KDQuantileTransformer object
+    kdit_: fitted KDITransformer object
 
     kdd_: fitted KDDiscretizer object
 
@@ -448,7 +448,7 @@ class KBinsKDQuantileDiscretizer(TransformerMixin, BaseEstimator):
         self.enable_predict_proba = enable_predict_proba
         self.random_state = random_state
 
-        self.kdqt_ = None
+        self.kdit_ = None
         self.kdd_ = None
 
     def fit(self, X):
@@ -456,7 +456,7 @@ class KBinsKDQuantileDiscretizer(TransformerMixin, BaseEstimator):
         self.n_features_in_ = n_features
         scott = np.power(n_samples*(1+2.0)/4.0, -1./(1+4))
 
-        left_kdqt = KDQuantileTransformer(
+        left_kdit = KDITransformer(
             alpha=self.left_alpha,
             n_quantiles=self.n_quantiles,
             subsample=self.subsample,
@@ -469,8 +469,8 @@ class KBinsKDQuantileDiscretizer(TransformerMixin, BaseEstimator):
             random_state=self.random_state,
         )
 
-        left_kdqt.fit(X)
-        T = left_kdqt.transform(X)
+        left_kdit.fit(X)
+        T = left_kdit.transform(X)
         left_kdd.fit(T)
         while not (left_kdd.n_bins_ <= self.n_bins).all():
             for fix in range(n_features):
@@ -478,7 +478,7 @@ class KBinsKDQuantileDiscretizer(TransformerMixin, BaseEstimator):
                     left_kdd.beta[fix] *= self.beta_backtrack
             left_kdd.fit(T)
 
-        right_kdqt = KDQuantileTransformer(
+        right_kdit = KDITransformer(
             alpha=self.right_alpha,
             n_quantiles=self.n_quantiles,
             subsample=self.subsample,
@@ -490,8 +490,8 @@ class KBinsKDQuantileDiscretizer(TransformerMixin, BaseEstimator):
             enable_predict_proba=self.enable_predict_proba,
             random_state=self.random_state,
         )
-        right_kdqt.fit(X)
-        T = right_kdqt.transform(X)
+        right_kdit.fit(X)
+        T = right_kdit.transform(X)
         right_kdd.fit(T)
 
         assert (left_kdd.n_bins_ <= right_kdd.n_bins_).all()
@@ -504,7 +504,7 @@ class KBinsKDQuantileDiscretizer(TransformerMixin, BaseEstimator):
         right_alpha = [self.right_alpha] * n_features
 
         geomean = list(np.sqrt(np.array(left_alpha) * np.array(right_alpha)))
-        mid_kdqt = KDQuantileTransformer(
+        mid_kdit = KDITransformer(
             alpha=geomean,
             n_quantiles=self.n_quantiles,
             subsample=self.subsample,
@@ -519,10 +519,10 @@ class KBinsKDQuantileDiscretizer(TransformerMixin, BaseEstimator):
 
         while not (left_n_bins == right_n_bins).all():
             geomean = list(np.sqrt(np.array(left_alpha) * np.array(right_alpha)))
-            mid_kdqt.alpha = geomean
+            mid_kdit.alpha = geomean
 
-            mid_kdqt.fit(X)
-            T = mid_kdqt.transform(X)
+            mid_kdit.fit(X)
+            T = mid_kdit.transform(X)
             mid_kdd.fit(T)
 
             for fix in range(n_features):
@@ -530,25 +530,25 @@ class KBinsKDQuantileDiscretizer(TransformerMixin, BaseEstimator):
                 if mid_kdd.n_bins_[fix] == self.n_bins:
                     left_n_bins[fix] = mid_kdd.n_bins_[fix]
                     right_n_bins[fix] = mid_kdd.n_bins_[fix]
-                    left_alpha[fix] = mid_kdqt.alpha[fix]
-                    right_alpha[fix] = mid_kdqt.alpha[fix]
+                    left_alpha[fix] = mid_kdit.alpha[fix]
+                    right_alpha[fix] = mid_kdit.alpha[fix]
                 elif mid_kdd.n_bins_[fix] < self.n_bins:
                     left_n_bins[fix] = mid_kdd.n_bins_[fix]
-                    left_alpha[fix] = mid_kdqt.alpha[fix]
+                    left_alpha[fix] = mid_kdit.alpha[fix]
                 elif self.n_bins < mid_kdd.n_bins_[fix]:
                     right_n_bins[fix] = mid_kdd.n_bins_[fix]
-                    right_alpha[fix] = mid_kdqt.alpha[fix]
+                    right_alpha[fix] = mid_kdit.alpha[fix]
                 else:
                     assert False
 
             assert (left_n_bins <= self.n_bins).all()
             assert (self.n_bins <= right_n_bins).all()
 
-        mid_kdqt.fit(X)
-        T = mid_kdqt.transform(X)
+        mid_kdit.fit(X)
+        T = mid_kdit.transform(X)
         mid_kdd.fit(T)
         assert (mid_kdd.n_bins_ == self.n_bins).all()
-        self.kdqt_ = mid_kdqt
+        self.kdit_ = mid_kdit
         self.kdd_ = mid_kdd
 
         return self
@@ -560,7 +560,7 @@ class KBinsKDQuantileDiscretizer(TransformerMixin, BaseEstimator):
         having size (n_bins_[cix],).
         """
         centroids = [
-            self.kdqt_.inverse_transform(cent.reshape(-1, 1)).ravel()
+            self.kdit_.inverse_transform(cent.reshape(-1, 1)).ravel()
             for cent in self.kdd_.centroids_
         ]
         return centroids
@@ -572,13 +572,13 @@ class KBinsKDQuantileDiscretizer(TransformerMixin, BaseEstimator):
         The returned list will be of length (n_clusters - 1).
         """
         boundaries = [
-            self.kdqt_.inverse_transform(bound.reshape(-1, 1)).ravel()
+            self.kdit_.inverse_transform(bound.reshape(-1, 1)).ravel()
             for bound in self.kdd_.boundaries_
         ]
         return boundaries
 
     def transform(self, X):
-        Y = self.kdqt_.transform(X)
+        Y = self.kdit_.transform(X)
         T = self.kdd_.transform(Y)
         return T
 
@@ -593,7 +593,7 @@ class KBinsKDQuantileDiscretizer(TransformerMixin, BaseEstimator):
         Y: np.array of shape (n,)
             The discretization of X, taking values from [0, ..., n_clusters].
         """
-        Y = self.kdqt_.transform(X)
+        Y = self.kdit_.transform(X)
         pred = self.kdd_.predict(Y)
         return pred
 
@@ -609,6 +609,6 @@ class KBinsKDQuantileDiscretizer(TransformerMixin, BaseEstimator):
             The KDE-estimated probability that each item in X belongs
             to each of the classes.
         """
-        Y = self.kdqt_.transform(X)
+        Y = self.kdit_.transform(X)
         proba = self.kdd_.predict_proba(Y)
         return proba

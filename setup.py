@@ -7,9 +7,9 @@ def readme():
 
 
 configuration = {
-    "name": "kdquantile",
+    "name": "kdtransform",
     "version": "0.1.0",
-    "description": "Kernel density quantile transformation",
+    "description": "Kernel density integral transformation",
     "long_description": readme(),
     "classifiers": [
         "Development Status :: 3 - Alpha",
@@ -28,13 +28,13 @@ configuration = {
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
     ],
-    "keywords": "preprocessing, quantile transformation, kernel smoothing",
-    "url": "http://github.com/calvinmccarter/kdquantile",
+    "keywords": "preprocessing, integral transformation, kernel smoothing",
+    "url": "http://github.com/calvinmccarter/kdtransform",
     "author": "Calvin McCarter",
     "author_email": "mccarter.calvin@gmail.com",
     "maintainer": "Calvin McCarter",
     "maintainer_email": "mccarter.calvin@gmail.com",
-    "packages": ["kdquantile"],
+    "packages": ["kdtransform"],
     "install_requires": [
         "numpy",
         "scikit-learn >= 0.23",

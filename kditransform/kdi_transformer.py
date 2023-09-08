@@ -16,7 +16,7 @@ from sklearn.utils.validation import (
     check_random_state,
 )
 
-from kdquantile.ksum import (
+from kditransform.ksum import (
     betas_for_order,
     h_Gauss_to_K,
     ksum_numba,
@@ -25,7 +25,7 @@ from kdquantile.ksum import (
 BOUNDS_THRESHOLD = 1e-7
 
 
-class KDQuantileTransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimator):
+class KDITransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimator):
     """Transform features using kernel density quantiles information.
 
     This method transforms the features to follow a uniform distribution,

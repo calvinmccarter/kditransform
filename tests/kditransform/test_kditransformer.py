@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import time
 
-import kdquantile
+import kditransform
 
 from sklearn.preprocessing import QuantileTransformer
 
@@ -30,54 +30,54 @@ def test_correlation(kernel, polyexp_order, polyexp_eval, atol):
     cr = np.cov(XR,YR)
     cr = cr[0,1] / np.sqrt(cr[0,0] * cr[1,1])
 
-    kdqer = kdquantile.KDQuantileTransformer(
+    kdier = kditransform.KDITransformer(
         alpha=1., kernel=kernel, polyexp_order=polyexp_order, polyexp_eval=polyexp_eval)
 
-    Xkdq = kdqer.fit_transform(X.reshape(-1, 1))
-    Ykdq = kdqer.fit_transform(Y.reshape(-1, 1))
-    ckdq = np.cov(Xkdq.ravel(), Ykdq.ravel())
-    ckdq = ckdq[0,1] / np.sqrt(ckdq[0,0] * ckdq[1,1])
+    Xkdi = kdier.fit_transform(X.reshape(-1, 1))
+    Ykdi = kdier.fit_transform(Y.reshape(-1, 1))
+    ckdi = np.cov(Xkdi.ravel(), Ykdi.ravel())
+    ckdi = ckdi[0,1] / np.sqrt(ckdi[0,0] * ckdi[1,1])
 
-    assert Xkdq.shape == (1000, 1)
-    assert Ykdq.shape == (1000, 1)
-    assert cp <= ckdq <= cr
-    np.testing.assert_allclose(ckdq, 0.9581695121244862, rtol=0, atol=atol)
+    assert Xkdi.shape == (1000, 1)
+    assert Ykdi.shape == (1000, 1)
+    assert cp <= ckdi <= cr
+    np.testing.assert_allclose(ckdi, 0.9581695121244862, rtol=0, atol=atol)
 
 
 @pytest.mark.parametrize("kernel", ["gaussian", "polyexp"])
 def test_multicolumns(kernel):
     rng = np.random.default_rng(12345)
     X = rng.uniform(size=(500, 100))
-    Xkdq = kdquantile.KDQuantileTransformer(alpha=1., kernel=kernel).fit_transform(X)
-    assert Xkdq.shape == X.shape
-    np.testing.assert_allclose(X, Xkdq, rtol=1e-2, atol=1e-1)
+    Xkdi = kditransform.KDITransformer(alpha=1., kernel=kernel).fit_transform(X)
+    assert Xkdi.shape == X.shape
+    np.testing.assert_allclose(X, Xkdi, rtol=1e-2, atol=1e-1)
 
 
 @pytest.mark.parametrize("kernel", ["gaussian", "polyexp"])
 def test_constant(kernel):
     X = np.ones((100, 1))
-    Ykdq = kdquantile.KDQuantileTransformer(alpha=1., kernel=kernel).fit_transform(X)
+    Ykdi = kditransform.KDITransformer(alpha=1., kernel=kernel).fit_transform(X)
     Yq = QuantileTransformer().fit_transform(X)
-    assert Ykdq.shape == Yq.shape
-    np.testing.assert_equal(Yq, Ykdq)
+    assert Ykdi.shape == Yq.shape
+    np.testing.assert_equal(Yq, Ykdi)
 
 
 def test_gaussian_precision():
     rng = np.random.default_rng(12345)
     X = rng.lognormal(0.5, 1, size=(12000, 1))
-    ultra = kdquantile.KDQuantileTransformer(
+    ultra = kditransform.KDITransformer(
         alpha=1., kernel="gaussian",
         n_quantiles=None, subsample=None, random_state=12345)
-    high = kdquantile.KDQuantileTransformer(
+    high = kditransform.KDITransformer(
         alpha=1., kernel="gaussian",
         n_quantiles=1000, subsample=10000, random_state=12345)
-    med = kdquantile.KDQuantileTransformer(
+    med = kditransform.KDITransformer(
         alpha=1., kernel="gaussian",
         n_quantiles=1000, subsample=3000, random_state=12345)
-    low = kdquantile.KDQuantileTransformer(
+    low = kditransform.KDITransformer(
         alpha=1., kernel="gaussian",
         n_quantiles=1000, subsample=1000, random_state=12345)
-    bad = kdquantile.KDQuantileTransformer(
+    bad = kditransform.KDITransformer(
         alpha=1., kernel="gaussian",
         n_quantiles=100, subsample=1000, random_state=12345)
     ultra_time = time.time()
@@ -108,17 +108,17 @@ def test_gaussian_precision():
 def test_precision(order, polyexp_eval, atol):
     rng = np.random.default_rng(12345)
     X = rng.lognormal(0.5, 1, size=(12000, 1))
-    ultra = kdquantile.KDQuantileTransformer(
+    ultra = kditransform.KDITransformer(
         alpha=1., kernel="gaussian",
         n_quantiles=None, subsample=None, random_state=12345)
-    pekdqer = kdquantile.KDQuantileTransformer(
+    pekdier = kditransform.KDITransformer(
         alpha=1., kernel="polyexp",
         polyexp_order=order, polyexp_eval=polyexp_eval, n_quantiles=1000)
     ultra_time = time.time()
     Y_ultra = ultra.fit_transform(X)
     ultra_time = time.time() - ultra_time
-    pekdq_time = time.time()
-    Y_pekdq = pekdqer.fit_transform(X)
-    pekdq_time = time.time() - pekdq_time
-    print(f"ultra_time: {ultra_time:.3f} pe_{order}_time: {pekdq_time:.3f}")
-    np.testing.assert_allclose(Y_ultra, Y_pekdq, rtol=0.0, atol=atol)
+    pekdi_time = time.time()
+    Y_pekdi = pekdier.fit_transform(X)
+    pekdi_time = time.time() - pekdi_time
+    print(f"ultra_time: {ultra_time:.3f} pe_{order}_time: {pekdi_time:.3f}")
+    np.testing.assert_allclose(Y_ultra, Y_pekdi, rtol=0.0, atol=atol)
