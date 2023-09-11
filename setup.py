@@ -7,7 +7,7 @@ def readme():
 
 
 configuration = {
-    "name": "kdtransform",
+    "name": "kditransform",
     "version": "0.1.0",
     "description": "Kernel density integral transformation",
     "long_description": readme(),
@@ -29,13 +29,14 @@ configuration = {
         "Programming Language :: Python :: 3.8",
     ],
     "keywords": "preprocessing, integral transformation, kernel smoothing",
-    "url": "http://github.com/calvinmccarter/kdtransform",
+    "url": "http://github.com/calvinmccarter/kditransform",
     "author": "Calvin McCarter",
     "author_email": "mccarter.calvin@gmail.com",
     "maintainer": "Calvin McCarter",
     "maintainer_email": "mccarter.calvin@gmail.com",
-    "packages": ["kdtransform"],
+    "packages": ["kditransform"],
     "install_requires": [
+        "numba",
         "numpy",
         "scikit-learn >= 0.23",
         "scipy >= 1.0",
