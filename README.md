@@ -18,6 +18,13 @@ You can tune the interpolation $\alpha$ between 0 (quantile transform) and $\inf
 
 ## Installation 
 
+### Installation from PyPI
+```
+pip install kditransform
+```
+
+### Installation from source
+After cloning this repo, install the dependencies on the command-line, then install kditransform:
 ```
 pip install -r requirements.txt
 pip install -e .
@@ -29,6 +36,7 @@ pytest
 `kditransform.KDTransformer` is a drop-in replacement for [sklearn.preprocessing.QuantileTransformer](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.QuantileTransformer.html). When `alpha` (defaults to 1.0) is small, our method behaves like the QuantileTransformer; when `alpha` is large, it behaves like [sklearn.preprocessing.MinMaxScaler](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.MinMaxScaler.html).
 
 ```
+import numpy as np
 from kditransform import KDITransformer
 X = np.random.uniform(size=(500, 1))
 kdt = KDITransformer(alpha=1.)
