@@ -4,9 +4,17 @@ The kernel-density integral transformation, like [min-max scaling](https://sciki
 It achieves a happy balance between these two transforms, preserving the shape of the input distribution like min-max scaling, while nonlinearly attenuating the effect of outliers like quantile transformation.
 It can also be used to discretize features, offering a data-driven alternative to univariate clustering or [K-bins discretization](https://scikit-learn.org/stable/modules/preprocessing.html#preprocessing-discretization).
 
-You can tune the interpolation $\alpha$ between 0 (quantile transform) and $\infty$ (min-max transform), but a good default is $\alpha=1$, which is equivalent to using `scipy.stats.gaussian_kde(bw_method=1)`. This improves performance for a lot of supervised learning problems; see [classification-plots.ipynb](https://github.com/calvinmccarter/kditransform/blob/master/examples/classification-plots.ipynb) for example code.
+You can tune the interpolation $\alpha$ between 0 (quantile transform) and $\infty$ (min-max transform), but a good default is $\alpha=1$, which is equivalent to using `scipy.stats.gaussian_kde(bw_method=1)`. This is an easy way to improves performance for a lot of supervised learning problems. See [classification-plots.ipynb](https://github.com/calvinmccarter/kditransform/blob/master/examples/classification-plots.ipynb) for example code.
 
-<img src="examples/Accuracy-vs-bwf-iris-pca.jpg" alt="drawing" width="300"/><img src="examples/MSE-vs-bwf-cahousing-linr-nolegend.jpg" alt="drawing" width="300"/>
+<figure>
+  <figcaption><i>Accuracy on Iris</i></figcaption>
+  <img src="examples/Accuracy-vs-bwf-iris-pca.jpg" alt="drawing" width="300"/>
+</figure>
+<figure>
+  <figcaption><i>rMSE on CA Housing</i></figcaption>
+  <img src="examples/MSE-vs-bwf-cahousing-linr-nolegend.jpg" alt="drawing" width="300"/>
+</figure>
+    
 
 ## Installation 
 
