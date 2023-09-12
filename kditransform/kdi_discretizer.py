@@ -1,7 +1,6 @@
 import warnings
 
 import numpy as np
-import scipy.optimize as spop
 import scipy.signal as spsg
 import scipy.stats as spst
 
@@ -213,7 +212,7 @@ class KDDiscretizer(TransformerMixin, BaseEstimator):
         lnorm = pis + np.log(np.sum(np.exp(unnorm_logprobas-pis), axis=1, keepdims=True))
         pred_logprobas = unnorm_logprobas - lnorm
         pred_probas = np.exp(pred_logprobas)
-        return pred_probas  
+        return pred_probas
 
 
 class KDIDiscretizer(TransformerMixin, BaseEstimator):
