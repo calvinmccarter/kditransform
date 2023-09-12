@@ -1,5 +1,6 @@
 hdbscan
 matplotlib
 jupyterlab
+pandas
 scikit-survival
 seaborn
