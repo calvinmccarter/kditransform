@@ -6,9 +6,7 @@ It can also be used to discretize features, offering a data-driven alternative t
 
 You can tune the interpolation $\alpha$ between 0 (quantile transform) and $\infty$ (min-max transform), but a good default is $\alpha=1$, which is equivalent to using `scipy.stats.gaussian_kde(bw_method=1)`. This improves performance for a lot of supervised learning problems; see [classification-plots.ipynb](https://github.com/calvinmccarter/kditransform/blob/master/examples/classification-plots.ipynb) for example code.
 
-[Iris](examples/Accuracy-vs-bwf-iris-pca.jpg)
-
-[CA Housing](examples/MSE-vs-bwf-cahousing-linr-nolegend.jpg)
+<img src="examples/Accuracy-vs-bwf-iris-pca.jpg" alt="drawing" width="300"/><img src="examples/MSE-vs-bwf-cahousing-linr-nolegend.jpg" alt="drawing" width="300"/>
 
 ## Installation 
 
