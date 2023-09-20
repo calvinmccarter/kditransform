@@ -1,0 +1,5 @@
+hdbscan
+matplotlib
+jupyterlab
+pandas
+seaborn
