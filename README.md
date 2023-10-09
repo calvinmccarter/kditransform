@@ -1,10 +1,10 @@
 # kditransform
 
-The kernel-density integral transformation, like [min-max scaling](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.MinMaxScaler.html) and [quantile transformation](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.QuantileTransformer.html), maps continuous features to the range `[0, 1]`.
+The kernel-density integral transformation [(McCarter, 2023, TMLR)](https://openreview.net/pdf?id=6OEcDKZj5j), like [min-max scaling](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.MinMaxScaler.html) and [quantile transformation](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.QuantileTransformer.html), maps continuous features to the range `[0, 1]`.
 It achieves a happy balance between these two transforms, preserving the shape of the input distribution like min-max scaling, while nonlinearly attenuating the effect of outliers like quantile transformation.
 It can also be used to discretize features, offering a data-driven alternative to univariate clustering or [K-bins discretization](https://scikit-learn.org/stable/modules/preprocessing.html#preprocessing-discretization).
 
-You can tune the interpolation $\alpha$ between 0 (quantile transform) and $\infty$ (min-max transform), but a good default is $\alpha=1$, which is equivalent to using `scipy.stats.gaussian_kde(bw_method=1)`. This is an easy way to improves performance for a lot of supervised learning problems. See [classification-plots.ipynb](https://github.com/calvinmccarter/kditransform/blob/master/examples/regression-plots.ipynb) for example code and the [arXiv preprint](https://arxiv.org/abs/2309.10194) for a detailed description of the method.
+You can tune the interpolation $\alpha$ between 0 (quantile transform) and $\infty$ (min-max transform), but a good default is $\alpha=1$, which is equivalent to using `scipy.stats.gaussian_kde(bw_method=1)`. This is an easy way to improves performance for a lot of supervised learning problems. See [this notebook](https://github.com/calvinmccarter/kditransform/blob/master/examples/regression-plots.ipynb) for example usage and the [paper](https://openreview.net/pdf?id=6OEcDKZj5j) for a detailed description of the method.
 
 <figure>
   <figcaption><i>Accuracy on Iris</i></figcaption>
