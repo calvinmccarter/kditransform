@@ -67,15 +67,19 @@ P = kdd.predict_proba(X)  # probabilistic one-hot encoding
 ## Citing this method
 
 If you use this tool, please cite KDITransform
-using the following reference to our [arXiv preprint](https://arxiv.org/abs/2309.10194):
+using the following reference to our [TMLR paper](https://openreview.net/pdf?id=6OEcDKZj5j):
 
 In Bibtex format:
 
 ```bibtex
-@article{mccarter2023kernel,
-    title={The Kernel Density Integral Transformation},
-    journal = {arXiv preprint arXiv:2309.10194},
-    author={Calvin McCarter},
-    year={2023},
+@article{
+mccarter2023the,
+title={The Kernel Density Integral Transformation},
+author={Calvin McCarter},
+journal={Transactions on Machine Learning Research},
+issn={2835-8856},
+year={2023},
+url={https://openreview.net/forum?id=6OEcDKZj5j},
+note={}
 }
 ```
