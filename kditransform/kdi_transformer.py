@@ -402,7 +402,7 @@ class KDITransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimator):
             # for inverse transform, match a uniform distribution
             with np.errstate(invalid="ignore"):  # hide NaN comparison warnings
                 if output_distribution == "normal":
-                    X_col = stats.norm.cdf(X_col)
+                    X_col = spst.norm.cdf(X_col)
                 # else output distribution is already a uniform distribution
 
         # find index for lower and higher bounds
@@ -437,12 +437,12 @@ class KDITransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimator):
         if not inverse:
             with np.errstate(invalid="ignore"):  # hide NaN comparison warnings
                 if output_distribution == "normal":
-                    X_col = stats.norm.ppf(X_col)
+                    X_col = spst.norm.ppf(X_col)
                     # find the value to clip the data to avoid mapping to
                     # infinity. Clip such that the inverse transform will be
                     # consistent
-                    clip_min = stats.norm.ppf(BOUNDS_THRESHOLD - np.spacing(1))
-                    clip_max = stats.norm.ppf(1 - (BOUNDS_THRESHOLD - np.spacing(1)))
+                    clip_min = spst.norm.ppf(BOUNDS_THRESHOLD - np.spacing(1))
+                    clip_max = spst.norm.ppf(1 - (BOUNDS_THRESHOLD - np.spacing(1)))
                     X_col = np.clip(X_col, clip_min, clip_max)
                 # else output distribution is uniform and the ppf is the
                 # identity function so we let X_col unchanged
