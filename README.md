@@ -83,3 +83,7 @@ url={https://openreview.net/forum?id=6OEcDKZj5j},
 note={}
 }
 ```
+
+## Usage with TabPFN
+
+[TabPFN](https://arxiv.org/abs/2207.01848) is a meta-learned Transformer model for tabular classification. In the TabPFN paper, features are preprocessed with the concatenation of z-scored & power-transformed features. After simply [adding KDITransform'ed features](https://github.com/calvinmccarter/TabPFN/commit/e51e6621e2f1820d5646b14640fcfb9ef13f3c2d#diff-6e18bf62a38856a86e8846cefd2d9fd323dc178c161d4e63d23bf613dc6de654), I observed [improvements](https://github.com/calvinmccarter/TabPFN/blob/e51e6621e2f1820d5646b14640fcfb9ef13f3c2d/replicate-kditransform.ipynb) on the reported benchmarks. In particular, on the 30 test datasets in OpenML-CC18, mean AUC OVO increases from 0.8943 to 0.8950; on the subset of 18 numerical datasets in Table 1 of the TabPFN paper, mean AUC OVO increases from 0.9335 to 0.9344.
