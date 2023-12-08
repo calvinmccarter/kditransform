@@ -35,6 +35,8 @@ pytest
 
 `kditransform.KDTransformer` is a drop-in replacement for [sklearn.preprocessing.QuantileTransformer](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.QuantileTransformer.html). When `alpha` (defaults to 1.0) is small, our method behaves like the QuantileTransformer; when `alpha` is large, it behaves like [sklearn.preprocessing.MinMaxScaler](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.MinMaxScaler.html).
 
+To produce features that are roughly scaled like z-scores as in `StandardScaler`, use `KDTransformer(output_distribution='normal')`.
+
 ```
 import numpy as np
 from kditransform import KDITransformer

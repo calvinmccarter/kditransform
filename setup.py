@@ -8,9 +8,10 @@ def readme():
 
 configuration = {
     "name": "kditransform",
-    "version": "0.1.1",
+    "version": "0.2.0",
     "description": "Kernel density integral transformation",
     "long_description": readme(),
+    "long_description_content_type": "text/markdown",
     "classifiers": [
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Science/Research",
