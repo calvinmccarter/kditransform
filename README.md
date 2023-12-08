@@ -33,9 +33,9 @@ pytest
 
 ## Usage
 
-`kditransform.KDTransformer` is a drop-in replacement for [sklearn.preprocessing.QuantileTransformer](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.QuantileTransformer.html). When `alpha` (defaults to 1.0) is small, our method behaves like the QuantileTransformer; when `alpha` is large, it behaves like [sklearn.preprocessing.MinMaxScaler](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.MinMaxScaler.html).
+`kditransform.KDITransformer` is a drop-in replacement for [sklearn.preprocessing.QuantileTransformer](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.QuantileTransformer.html). When `alpha` (defaults to 1.0) is small, our method behaves like the QuantileTransformer; when `alpha` is large, it behaves like [sklearn.preprocessing.MinMaxScaler](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.MinMaxScaler.html).
 
-To produce features that are roughly scaled like z-scores as in `StandardScaler`, use `KDTransformer(output_distribution='normal')`.
+To produce features that are roughly scaled like z-scores as in `StandardScaler`, use `KDITransformer(output_distribution='normal')`. This applies the standard normal inverse CDF transform after the KDI transform.
 
 ```
 import numpy as np
