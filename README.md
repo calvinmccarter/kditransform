@@ -1,5 +1,8 @@
 # kditransform
 
+[![PyPI version](https://badge.fury.io/py/kditransform.svg)](https://badge.fury.io/py/kditransform)
+[![Downloads](https://pepy.tech/badge/kditransform)](https://pepy.tech/project/kditransform)
+
 The kernel-density integral transformation [(McCarter, 2023, TMLR)](https://openreview.net/pdf?id=6OEcDKZj5j), like [min-max scaling](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.MinMaxScaler.html) and [quantile transformation](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.QuantileTransformer.html), maps continuous features to the range `[0, 1]`.
 It achieves a happy balance between these two transforms, preserving the shape of the input distribution like min-max scaling, while nonlinearly attenuating the effect of outliers like quantile transformation.
 It can also be used to discretize features, offering a data-driven alternative to univariate clustering or [K-bins discretization](https://scikit-learn.org/stable/modules/preprocessing.html#preprocessing-discretization).
