@@ -8,7 +8,7 @@ def readme():
 
 configuration = {
     "name": "kditransform",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Kernel density integral transformation",
     "long_description": readme(),
     "long_description_content_type": "text/markdown",
@@ -39,7 +39,7 @@ configuration = {
     "install_requires": [
         "numba >= 0.48",
         "numpy",
-        "scikit-learn >= 0.23",
+        "scikit-learn >= 1.6.0",
         "scipy >= 1.0",
     ],
     "ext_modules": [],

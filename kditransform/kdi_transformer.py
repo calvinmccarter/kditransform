@@ -14,6 +14,7 @@ from sklearn.utils.validation import (
     FLOAT_DTYPES,
     check_is_fitted,    
     check_random_state,
+    validate_data,
 )
 
 from kditransform.ksum import (
@@ -451,13 +452,14 @@ class KDITransformer(OneToOneFeatureMixin, TransformerMixin, BaseEstimator):
 
     def _check_inputs(self, X, in_fit, accept_sparse_negative=False, copy=False):
         """Check inputs before fit and transform."""
-        X = self._validate_data(
-            X,
+        X = validate_data(
+            self,
+            X=X,
             reset=in_fit,
             accept_sparse=False,
             copy=copy,
             dtype=FLOAT_DTYPES,
-            force_all_finite=True,
+            ensure_all_finite=True,
         )
 
         return X

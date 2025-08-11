@@ -3,3 +3,4 @@ def test_import_packages():
     import kditransform
     from kditransform import KDITransformer
     from kditransform import KDIDiscretizer
+    from kditransform import SimpleKDIDiscretizer

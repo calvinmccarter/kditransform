@@ -2,5 +2,5 @@ numba>=0.48
 numpy
 pre-commit>=2.2.0
 pytest>=5.4.1
-scikit-learn>=0.23
+scikit-learn>=1.6.0
 scipy>=1.0

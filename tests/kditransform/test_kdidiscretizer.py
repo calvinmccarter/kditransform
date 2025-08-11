@@ -50,3 +50,11 @@ def test_predict_proba(N):
     p = kdider.predict_proba(x.reshape(-1, 1))
     assert p.shape == (N, 3)
     np.testing.assert_allclose(np.sum(p, axis=1), np.ones(N))
+
+def test_simple():
+    rng = np.random.default_rng(1)
+    X = np.exp(rng.normal(0, 1, size=(100, 1)))
+    kdider = kditransform.SimpleKDIDiscretizer(n_bins=5, alpha=1.)
+    T = kdider.fit_transform(X)
+    assert T.shape == X.shape
+    assert np.unique(T).size == 5

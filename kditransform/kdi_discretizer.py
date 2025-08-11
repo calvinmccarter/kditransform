@@ -611,3 +611,91 @@ class KBinsKDIDiscretizer(TransformerMixin, BaseEstimator):
         Y = self.kdit_.transform(X)
         proba = self.kdd_.predict_proba(Y)
         return proba
+
+
+class SimpleKDIDiscretizer(TransformerMixin, BaseEstimator):
+    """
+    Bin continuous data into intervals using KDITransformer.
+    Outputs are ordinal-encoded, with the exception of predict_proba.
+
+    Parameters
+    ----------
+    n_bins: int
+        Number of desired bins (default: 2).
+
+    alpha: float > 0, 'scott', 'silverman', or None
+        Bandwidth factor parameter for kernel density estimator.
+
+    right_alpha: float
+        Maximum alpha for bisection search.
+
+    n_quantiles : int, default=1000 or n_samples
+        Number of quantiles to be computed. It corresponds to the number
+        of landmarks used to discretize the cumulative distribution function.
+        If n_quantiles is larger than the number of samples, n_quantiles is set
+        to the number of samples as a larger number of quantiles does not give
+        a better approximation of the cumulative distribution function
+        estimator.
+
+    subsample : int, default=10_000
+        Maximum number of samples used to estimate the quantiles for
+        computational efficiency. Note that the subsampling procedure may
+        differ for value-identical sparse and dense matrices.
+
+    random_state : int, RandomState instance or None, default=None
+        Determines random number generation for subsampling and smoothing
+        noise.
+        Please see `subsample` for more details.
+        Pass an int for reproducible results across multiple function calls.
+
+    Attributes
+    ----------
+    kdit_: fitted KDITransformer object
+
+    n_features_in_: int
+        Number of features seen during `fit`.
+    """
+
+    def __init__(
+        self,
+        n_bins=2,
+        alpha=1.,
+        n_quantiles=1000,
+        subsample=None,
+        random_state=None,
+    ):
+        self.n_bins = n_bins
+
+        self.kdit_ = KDITransformer(
+            alpha=alpha,
+            n_quantiles=n_quantiles,
+            subsample=subsample,
+            random_state=random_state,
+        )
+        self.boundaries_ = None
+        self.n_features_in_ = None
+
+
+    def fit(self, X):
+        n_samples, n_features = X.shape
+        self.n_features_in_ = n_features
+
+        self.kdit_.fit(X)
+        invboundaries = np.tile(
+            np.linspace(0, 1, self.n_bins + 1)[1:-1].reshape(-1, 1),
+            n_features,
+        )
+        self.boundaries_ = self.kdit_.inverse_transform(invboundaries)
+        assert self.boundaries_.shape == (self.n_bins - 1, n_features)
+
+        return self
+
+    def get_boundaries(self):
+        return self.boundaries_.copy()
+
+    def transform(self, X):
+        T = np.column_stack([
+            np.digitize(X[:, i], self.boundaries_[:, i])
+            for i in range(self.n_features_in_)
+        ])
+        return T

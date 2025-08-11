@@ -2,3 +2,4 @@ from kditransform.kdi_transformer import KDITransformer
 from kditransform.kdi_discretizer import KDDiscretizer
 from kditransform.kdi_discretizer import KDIDiscretizer
 from kditransform.kdi_discretizer import KBinsKDIDiscretizer
+from kditransform.kdi_discretizer import SimpleKDIDiscretizer
